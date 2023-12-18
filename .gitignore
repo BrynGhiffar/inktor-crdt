@@ -1,3 +1,28 @@
 /target
 /Cargo.lock
 .vscode
+
+# Logs
+vect-crdt-test/logs
+vect-crdt-test/*.log
+vect-crdt-test/npm-debug.log*
+vect-crdt-test/yarn-debug.log*
+vect-crdt-test/yarn-error.log*
+vect-crdt-test/pnpm-debug.log*
+vect-crdt-test/lerna-debug.log*
+
+vect-crdt-test/node_modules
+vect-crdt-test/dist
+vect-crdt-test/dist-ssr
+vect-crdt-test/*.local
+
+# Editor directories and files
+vect-crdt-test/.vscode/*
+vect-crdt-test/!.vscode/extensions.json
+vect-crdt-test/.idea
+vect-crdt-test/.DS_Store
+vect-crdt-test/*.suo
+vect-crdt-test/*.ntvs*
+vect-crdt-test/*.njsproj
+vect-crdt-test/*.sln
+vect-crdt-test/*.sw?

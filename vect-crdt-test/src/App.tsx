@@ -1,8 +1,12 @@
-import { CSSProperties, Dispatch, FC, MutableRefObject, SetStateAction, useCallback, useEffect, useRef, useState } from 'react';
+import { CSSProperties, Dispatch, FC, MutableRefObject, SetStateAction, forwardRef, useCallback, useEffect, useRef, useState } from 'react';
 import { SVGDoc, SVGCircle, SVGDocInner, SVGObject, SVGRectangle, SVGGroup, SVGPath, SVGPathCommand } from "vect-crdt-rs";
 import './App.css';
 import { Configuration } from './components/Configuration';
 import { DivProps } from './types';
+import { DndContext, DragEndEvent, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { AllFeatures } from './components/Tree/Tree.story';
 
 type ReactSetSVGObject = Dispatch<SetStateAction<SVGObject | "root">>;
 type ReactSVGObjectState = [SVGObject | "root", ReactSetSVGObject];
@@ -17,15 +21,17 @@ const isObjectSelected = (id: string, obj: SVGObject | "root") => {
 const selectedColor = "lightgray";
 const unselectedColor = "transparent";
 
-const PaddedDiv: FC<DivProps> = (props) => {
-  const { children, ...divProps } = props;
+const PaddedDiv = forwardRef<HTMLDivElement, DivProps>((props, ref) => {
+  const { children, style: propsStyle, ...divProps } = props;
+  const style = { paddingLeft: "20px", ...propsStyle };
   return (
     <div
+      ref={ref}
       {...divProps}
-      style={{ paddingLeft: "20px" }}
+      style={style}
     >{children}</div>
   )
-}
+});
 
 const mapper = (
   docRef: MutableRefObject<SVGDoc>,
@@ -48,6 +54,7 @@ const mapper = (
         />
       case "GROUP":
         return <GroupCode
+          key={obj.id}
           docRef={docRef}
           data={obj}
           fetchSVGDoc={fetchSVGDoc}
@@ -55,6 +62,7 @@ const mapper = (
         />
       case "PATH":
         return <PathCode
+          key={obj.id}
           data={obj}
           selectedObjectState={selectedObjectState}
         />
@@ -80,16 +88,33 @@ const rgbToHex = (red: number, green: number, blue: number) => {
 }
 
 const CircleCode: FC<CircleCodeProps> = (props) => {
-  const [red, green, blue, __opacity] = props.data.fill;
-  const [strokeRed, strokeGreen, strokeBlue, __strokeOpacity ] = props.data.stroke;
-  const hex = rgbToHex(red, green, blue);
-  const strokeColor = rgbToHex(strokeRed, strokeGreen, strokeBlue);
-  const opacity = __opacity / 100;
+  const { 
+    attributes, 
+    listeners, 
+    setNodeRef,
+    transform,
+    transition
+  } = useSortable({ id: props.data.id });
+  const [fillRed, fillGreen, fillBlue, fillOpacity] = props.data.fill;
+  const opacity = props.data.opacity;
+  const [strokeRed, strokeGreen, strokeBlue, strokeOpacity ] = props.data.stroke;
   const [selectedObject, setSelectedObject] = props.selectedObjectState;
   const background = isObjectSelected(props.data.id, selectedObject) ? selectedColor : unselectedColor;
-  const style = { background, cursor: "pointer" };
+  const style: CSSProperties = { 
+    background, 
+    cursor: "pointer",
+  };
+  const divStyle: CSSProperties = {
+    transition, 
+    transform: CSS.Transform.toString(transform)
+  };
   return (
-    <PaddedDiv>
+    <PaddedDiv
+      style={divStyle}
+        ref={setNodeRef}
+        {...attributes}
+        {...listeners}
+    >
       <code
         style={style}
         onClick={() => setSelectedObject({ type: "CIRCLE", ...props.data })}
@@ -97,10 +122,11 @@ const CircleCode: FC<CircleCodeProps> = (props) => {
         cx="${props.data.pos.x}"
         cy="${props.data.pos.y}" 
         r="${props.data.radius}"
-        fill="${hex}"
-        stroke="${strokeColor}"  
+        fill="rgba(${fillRed}, ${fillGreen}, ${fillBlue}, ${fillOpacity})"
+        stroke="rgba(${strokeRed}, ${strokeGreen}, ${strokeBlue}, ${strokeOpacity})"  
         stroke-width="${props.data.stroke_width}"
-        opacity="${opacity}"/>`}
+        opacity="${opacity}"/>`
+      }
       </code>
     </PaddedDiv>
   )
@@ -112,12 +138,12 @@ type RectangleCodeProps = {
 }
 
 const RectangleCode: FC<RectangleCodeProps> = props => {
-  const [redFill, greenFill, blueFill, __opacity] = props.data.fill;
-  const hexFill = rgbToHex(redFill, greenFill, blueFill);
-  const opacity = __opacity / 100;
+  const [fillRed, fillGreen, fillBlue, fillOpacity] = props.data.fill;
+  const [strokeRed, strokeGreen, strokeBlue, strokeOpacity] = props.data.stroke;
   const [selectedObject, setSelectedObject] = props.selectedObjectState;
   const background = isObjectSelected(props.data.id, selectedObject) ? selectedColor : unselectedColor;
   const style = { background, cursor: "pointer" };
+  const opacity = props.data.opacity;
   return (
     <PaddedDiv>
       <code
@@ -128,9 +154,9 @@ const RectangleCode: FC<RectangleCodeProps> = props => {
       y="${props.data.pos.y}" 
       width="${props.data.width}" 
       height="${props.data.height}" 
-      fill="${hexFill}"
+      fill="rgba(${fillRed}, ${fillGreen}, ${fillBlue}, ${fillOpacity})"
       stroke-width="${props.data.stroke_width}"
-      stroke="${props.data.stroke}"
+      stroke="rgba(${strokeRed}, ${strokeGreen}, ${strokeBlue}, ${strokeOpacity})"
       opacity="${opacity}"/>`}
       </code>
     </PaddedDiv>
@@ -145,20 +171,52 @@ type GroupCodeProps = {
 }
 
 const GroupCode: FC<GroupCodeProps> = props => {
-
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8
+      }
+    })
+  );
+  const { 
+    attributes, 
+    listeners, 
+    setNodeRef,
+    transform,
+    transition
+  } = useSortable({ id: props.data.id });
   const [selectedObject, setSelectedObject] = props.selectedObjectState;
   const background = isObjectSelected(props.data.id, selectedObject) ? selectedColor : unselectedColor;
-  const style = { background, cursor: "pointer" };
   const onClick = useCallback(() => setSelectedObject({ type: "GROUP", ...props.data }), [props, setSelectedObject]);
+  const style = { background, cursor: "pointer" };
+  const divStyle: CSSProperties = {
+    transition, 
+    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined
+  };
 
+  const onDragEnd = useCallback((event: DragEndEvent) => {
+    console.log("Group Drag Event End", event);
+  }, [])
   return (
     <PaddedDiv
+      ref={setNodeRef}
+      style={divStyle}
+      {...listeners}
+      {...attributes}
     >
       <code
         style={style}
         onClick={onClick}
       >{`<g id=${props.data.id}>`}</code>
-      {props.data.children.map(mapper(props.docRef, props.fetchSVGDoc, props.selectedObjectState))}
+        <DndContext
+          collisionDetection={closestCenter} 
+          onDragEnd={onDragEnd}
+          sensors={sensors}
+        >
+          <SortableContext items={props.data.children} strategy={verticalListSortingStrategy}>
+            {props.data.children.map(mapper(props.docRef, props.fetchSVGDoc, props.selectedObjectState))}
+          </SortableContext>
+        </DndContext>
       <code style={style} onClick={onClick} >{"</g>"}</code>
     </PaddedDiv>
   )
@@ -189,22 +247,35 @@ const toPathString = (point: SVGPathCommand) => {
 }
 
 const PathCode: FC<PathCodeProps> = (props) => {
-  const path = props.data.points.map((p, i) => `${i == 0 ? "" : " "}${toPathString(p)}`);
+  const path = props.data.points.map((p, i) => [p.id, `${i == 0 ? "" : " "}${toPathString(p)}`]);
+  const [selectedObject, setSelectedObject] = props.selectedObjectState;
+  const onClick = useCallback(() => {
+    setSelectedObject({ type: "PATH", ...props.data});
+  }, [setSelectedObject, props]);
+  const background = isObjectSelected(props.data.id, selectedObject) ? selectedColor : unselectedColor;
+  const style = { background, cursor: "pointer" };
   return (
     <PaddedDiv>
-      <code>{"<path d=\""}</code>
+      <code onClick={onClick} style={style}>{"<path d=\""}</code>
       {
-        path.map(p => (
-          <code>{p}</code>
+        path.map(([id, p]) => (
+          <code key={id} onClick={onClick} style={style}>{p}</code>
         ))
       }
-      <code>{"\"/>"}</code>
+      <code style={style}>{"\"/>"}</code>
     </PaddedDiv>
   )
 }
 
 
 function App() {
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8
+      }
+    })
+  );
   const SVGDocRef = useRef(SVGDoc.new());
   const [inner, setInner] = useState<SVGDocInner>({ children: [] });
   const [selectedObject, setSelectedObject] = useState<SVGObject | "root">("root");
@@ -220,18 +291,30 @@ function App() {
   useEffect(() => {
     fetchSVGDoc();
   }, []);
+  const onDragEnd = useCallback((event: DragEndEvent) => {
+    console.log("onDragEnd", event);
+  }, []);
   const background = isObjectSelected("root", selectedObject) ? selectedColor : unselectedColor;
   const style: CSSProperties = { background, cursor: "pointer" };
   return (
     <>
       <div>
         <code style={style} onClick={() => setSelectedObject("root")}>{"<svg>"}</code>
-        {inner.children.map(mapper(
-          SVGDocRef,
-          fetchSVGDoc,
-          [selectedObject, setSelectedObject]
-        ))
-        }
+        <DndContext
+          collisionDetection={closestCenter} 
+          onDragEnd={onDragEnd}
+          sensors={sensors}
+        >
+          <SortableContext items={inner.children} strategy={verticalListSortingStrategy}>
+            {
+              inner.children.map(mapper(
+                SVGDocRef,
+                fetchSVGDoc,
+                [selectedObject, setSelectedObject]
+              ))
+            }
+          </SortableContext>
+        </DndContext>
         <code style={style} onClick={() => setSelectedObject("root")}>{"</svg>"}</code>
       </div>
       <Configuration
@@ -239,6 +322,7 @@ function App() {
         fetchSVGDoc={fetchSVGDoc}
         data={selectedObject}
       />
+      <AllFeatures/>
     </>
   )
 }
