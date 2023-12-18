@@ -21,15 +21,15 @@ pub struct Vec2 {
 
 #[derive(Serialize, Deserialize, Tsify, Clone)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct Color(i32 /* red (0 - 255) */, i32 /* green (0 - 255) */, i32 /* blue (0 - 255) */, i32 /* (0 - 100) */);
+pub struct Color(i32 /* red (0 - 255) */, i32 /* green (0 - 255) */, i32 /* blue (0 - 255) */, f32 /* (0 - 100) */);
 
 impl Color {
     fn white() -> Color {
-        Color(255, 255, 255, 100)
+        Color(255, 255, 255, 1.0)
     }
 
     fn black() -> Color {
-        Color(0, 0, 0, 0)
+        Color(0, 0, 0, 1.0)
     }
 }
 
@@ -53,6 +53,20 @@ pub enum SVGPathCommand {
     BezierQuadReflect { id: String, pos: Vec2 }, // T
 }
 
+impl SVGPathCommand {
+    fn get_id<'a>(&'a self) -> &'a str {
+        match self {
+            Self::Start { id, .. } => id,
+            Self::Line { id, .. } => id,
+            Self::Close { id } => id,
+            Self::Bezier { id, .. } => id,
+            Self::BezierReflect { id, .. } => id,
+            Self::BezierQuad { id, .. } => id,
+            Self::BezierQuadReflect { id, .. } => id
+        }
+    }
+}
+
 #[derive(Copy, Clone)]
 #[wasm_bindgen]
 pub enum SVGPathCommandType {
@@ -66,6 +80,7 @@ pub enum SVGPathCommandType {
 }
 
 #[derive(Serialize, Deserialize, Tsify, Clone)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct SVGGroup {
     id: String,
     fill: Option<Color>,
@@ -121,11 +136,11 @@ impl SVGGroup {
         }
     }
 
-    pub fn set_fill(&mut self, red: i32, green: i32, blue: i32, opacity: i32) {
+    pub fn set_fill(&mut self, red: i32, green: i32, blue: i32, opacity: f32) {
         self.fill = Some(Color(red, green, blue, opacity));
     }
 
-    pub fn set_stroke(&mut self, red: i32, green: i32, blue: i32, opacity: i32) {
+    pub fn set_stroke(&mut self, red: i32, green: i32, blue: i32, opacity: f32) {
         self.stroke = Some(Color(red, green, blue, opacity));
     }
 
@@ -319,7 +334,7 @@ impl SVGRectangle {
         self.width = width;
     }
 
-    pub fn set_fill(&mut self, red: i32, green: i32, blue: i32, opacity: i32) {
+    pub fn set_fill(&mut self, red: i32, green: i32, blue: i32, opacity: f32) {
         self.fill = Color(red, green, blue, opacity);
     }
 
@@ -327,7 +342,7 @@ impl SVGRectangle {
         self.stroke_width = stroke_width;
     }
 
-    pub fn set_stroke(&mut self, red: i32, green: i32, blue: i32, opacity: i32) {
+    pub fn set_stroke(&mut self, red: i32, green: i32, blue: i32, opacity: f32) {
         self.stroke = Color(red, green, blue, opacity);
     }
 }
@@ -354,6 +369,7 @@ pub struct PartialSVGPath {
     stroke: Option<Color>,
     #[tsify(optional)]
     points: Option<Vec<SVGPathCommand>>,
+    #[tsify(optional)]
     opacity: Option<f32>
 }
 
@@ -393,6 +409,17 @@ impl SVGPath {
             opacity: 1.0
         }
     }
+
+    fn find_point_mut<'a>(&'a mut self, point_id: &'a str) -> Option<&'a mut SVGPathCommand> {
+        for point in self.points.iter_mut() {
+            if point.get_id().eq(point_id) {
+                return Some(point);
+            }
+        }
+        return None;
+    }
+
+    // fn find_point<'a>(&'a )
 }
 
 #[derive(Serialize, Deserialize, Tsify, Clone)]
@@ -627,6 +654,11 @@ impl SVGDoc {
         return SVGDoc { inner: SVGDocInner { children: Vec::new() } };
     }
 
+    pub fn get_group(&self, group_id: String) -> Option<SVGGroup> {
+        let group = self.find_group(&group_id);
+        return group.map(|g| g.clone());
+    }
+
     pub fn add_group(&mut self, group_id: Option<String>, partial_group: PartialSVGGroup) {
         let mut new_group = SVGGroup::default();
         new_group.apply_some(partial_group);
@@ -658,6 +690,11 @@ impl SVGDoc {
         circle.apply_some(edits);
     }
 
+    pub fn get_rectangle(&self, rectangle_id: String) -> Option<SVGRectangle> {
+        let rectangle = self.find_rectangle(&rectangle_id);
+        return rectangle.map(|r| r.clone());
+    }
+
     pub fn add_rectangle(&mut self, group_id: Option<String>, partial_rectangle: PartialSVGRectangle) {
         let mut rectangle = SVGRectangle::default();
         rectangle.apply_some(partial_rectangle);
@@ -674,6 +711,11 @@ impl SVGDoc {
         rectangle.apply_some(edits);
     }
 
+    pub fn get_path(&self, path_id: String) -> Option<SVGPath> {
+        let path = self.find_path(&path_id);
+        return path.map(|p| p.clone());
+    }
+
     pub fn add_path(&mut self, group_id: Option<String>, partial_path: PartialSVGPath) {
         let mut path = SVGPath::default();
         path.apply_some(partial_path);
@@ -688,6 +730,90 @@ impl SVGDoc {
     pub fn edit_path(&mut self, path_id: String, partial_path: PartialSVGPath) {
         let Some(path) = self.find_path_mut(&path_id) else { return; };
         path.apply_some(partial_path);
+    }
+
+    pub fn edit_path_point_type(
+        &mut self, 
+        path_id: String, 
+        point_id: String, 
+        command_type: SVGPathCommandType, 
+    ) {
+        let Some(path) = self.find_path_mut(&path_id) else { return; };
+        let Some(point) = path.find_point_mut(&point_id) else { return; };
+        let pos = Vec2 { x: 0, y: 0 };
+        let command = match command_type {
+            SVGPathCommandType::START => SVGPathCommand::Start { id: gen_str_id(), pos },
+            SVGPathCommandType::LINE => SVGPathCommand::Line { id: gen_str_id(), pos },
+            SVGPathCommandType::CLOSE => SVGPathCommand::Close { id: gen_str_id() },
+            SVGPathCommandType::BEZIER => {
+                let handle1 = Vec2 { x: pos.x + 20, y: pos.y + 20 };
+                let handle2 = Vec2 { x: pos.x + 20, y: pos.y - 20 };
+                SVGPathCommand::Bezier { id: gen_str_id(), handle1, handle2, pos }
+            },
+            SVGPathCommandType::BEZIER_REFLECT => {
+                let handle = Vec2 { x: pos.x, y: pos.y + 20 };
+                SVGPathCommand::BezierReflect { id: gen_str_id(), handle, pos }
+            },
+            SVGPathCommandType::BEZIER_QUAD => {
+                let handle = Vec2 { x: pos.x, y: pos.y + 20 };
+                SVGPathCommand::BezierQuad { id: gen_str_id(), handle, pos }
+            },
+            SVGPathCommandType::BEZIER_QUAD_REFLECT => {
+                SVGPathCommand::BezierQuadReflect { id: gen_str_id(), pos }
+            }
+        };
+        *point = command;
+    }
+
+    pub fn edit_path_point_pos(&mut self, path_id: String, point_id: String, new_pos: Vec2) {
+        let Some(path) = self.find_path_mut(&path_id) else { return; };
+        let Some(point) = path.find_point_mut(&point_id) else { return; };
+        match point {
+            SVGPathCommand::Start { pos, .. } => {
+                *pos = new_pos;
+            },
+            SVGPathCommand::Line { pos, .. } => {
+                *pos = new_pos;
+            },
+            SVGPathCommand::Bezier { pos, .. } => {
+                *pos = new_pos;
+            },
+            SVGPathCommand::BezierQuad { pos, .. } => {
+                *pos = new_pos;
+            },
+            SVGPathCommand::BezierQuadReflect { pos, .. } => {
+                *pos = new_pos;
+            },
+            _ => ()
+        };
+    }
+
+    pub fn edit_path_point_handle1(&mut self, path_id: String, point_id: String, new_handle1: Vec2) {
+        let Some(path) = self.find_path_mut(&path_id) else { return; };
+        let Some(point) = path.find_point_mut(&point_id) else { return; };
+        match point {
+            SVGPathCommand::Bezier { handle1, .. } => {
+                *handle1 = new_handle1;
+            },
+            SVGPathCommand::BezierReflect { handle, .. } => {
+                *handle = new_handle1;
+            },
+            SVGPathCommand::BezierQuad { handle, .. } => {
+                *handle = new_handle1;
+            },
+            _ => ()
+        }
+    }
+
+    pub fn edit_path_point_handle2(&mut self, path_id: String, point_id: String, new_handle2: Vec2) {
+        let Some(path) = self.find_path_mut(&path_id) else { return; };
+        let Some(point) = path.find_point_mut(&point_id) else { return; };
+        match point {
+            SVGPathCommand::Bezier { handle2, .. } => {
+                *handle2 = new_handle2;
+            },
+            _ => ()
+        };
     }
 
     pub fn add_point_to_path(&mut self, path_id: String, command: SVGPathCommandType, pos: Vec2) {

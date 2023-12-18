@@ -1,6 +1,6 @@
 import { CSSProperties, FC, MutableRefObject, useCallback } from "react";
-import { SVGCircle, SVGDoc, SVGGroup, SVGObject, SVGPath, SVGPathCommand, SVGPathCommandType, SVGRectangle } from "vect-crdt-rs";
-import { DivProps } from "../../types";
+import { SVGDoc, SVGPathCommand, SVGPathCommandType } from "vect-crdt-rs";
+import { DivProps, SelectedObject, SelectedSVG } from "../../types";
 import { RgbaColor, RgbaColorPicker } from "react-colorful";
 import { z } from "zod";
 
@@ -53,7 +53,7 @@ const ConfigurationRoot: FC<ConfigurationRootProps> = (props) => {
 }
 
 type ConfigurationCircleProps = {
-    data: SVGCircle,
+    data: SelectedSVG,
     docRef: MutableRefObject<SVGDoc>,
     fetchSVGDoc: (id?: string) => void,
 }
@@ -171,7 +171,7 @@ const ConfigurationCircle: FC<ConfigurationCircleProps> = (props) => {
 }
 
 type ConfigurationRectangleProps = {
-    data: SVGRectangle
+    data: SelectedSVG
     docRef: MutableRefObject<SVGDoc>,
     fetchSVGDoc: () => void,
 }
@@ -260,7 +260,7 @@ const ConfigurationRectangle: FC<ConfigurationRectangleProps> = (props) => {
 }
 
 type ConfigurationGroupProps = {
-    data: SVGGroup,
+    data: SelectedSVG,
     docRef: MutableRefObject<SVGDoc>,
     fetchSVGDoc: () => void,
 }
@@ -309,12 +309,6 @@ const ConfigurationGroup: FC<ConfigurationGroupProps> = (props) => {
             >Add Path</button>
         </>
     );
-}
-
-const ConfigurationPathCommandClose: FC = () => {
-    return (
-        <div></div>
-    )
 }
 
 type ConfigurationPathCommandRowProps = {
@@ -514,7 +508,7 @@ const ConfigurationPathCommandRow: FC<ConfigurationPathCommandRowProps> = (props
 
 
 type ConfigurationPathProps = {
-    data: SVGPath;
+    data: SelectedSVG;
     docRef: MutableRefObject<SVGDoc>;
     fetchSVGDoc: () => void,
 }
@@ -556,7 +550,7 @@ const ConfigurationPath: FC<ConfigurationPathProps> = (props) => {
 }
 
 type ConfigurationProps = {
-    data: SVGObject | "root";
+    selectedObject: SelectedObject;
     docRef: MutableRefObject<SVGDoc>,
     fetchSVGDoc: (id?: string) => void,
 };
@@ -564,18 +558,18 @@ type ConfigurationProps = {
 export const Configuration: FC<ConfigurationProps> = (props) => {
     return (
         <div>
-            {configurationMapper(props.data, props.docRef, props.fetchSVGDoc)}
+            {configurationMapper(props.selectedObject, props.docRef, props.fetchSVGDoc)}
         </div>
     )
 }
 
 // utility functions
 const configurationMapper = (
-    data: SVGObject | "root",
+    selectedObject: SelectedObject,
     docRef: MutableRefObject<SVGDoc>,
     fetchSVGDoc: (id?: string) => void,
 ) => {
-    if (data === "root") {
+    if (selectedObject === "root") {
         return (
             <ConfigurationRoot
                 docRef={docRef}
@@ -583,30 +577,30 @@ const configurationMapper = (
             />
         )
     }
-    switch (data.type) {
+    switch (selectedObject.type) {
         case "CIRCLE":
             return <ConfigurationCircle
                 fetchSVGDoc={fetchSVGDoc}
                 docRef={docRef}
-                data={data}
+                data={selectedObject}
             />
         case "RECTANGLE":
             return <ConfigurationRectangle
                 fetchSVGDoc={fetchSVGDoc}
                 docRef={docRef}
-                data={data}
+                data={selectedObject}
             />
         case "GROUP":
             return <ConfigurationGroup
                 docRef={docRef}
                 fetchSVGDoc={fetchSVGDoc}
-                data={data}
+                data={selectedObject}
             />
         case "PATH":
             return <ConfigurationPath
                 docRef={docRef}
                 fetchSVGDoc={fetchSVGDoc}
-                data={data}
+                data={selectedObject}
             />
     }
 }

@@ -52,12 +52,12 @@ export const TreeItem = forwardRef<HTMLDivElement, Props>(
     return (
       <li
         ref={wrapperRef}
-        style={
-          defaultStyle
-        }
+        style={defaultStyle}
         {...props}
       >
-        <div className={styles.TreeItem} ref={ref} style={style}>
+        <div 
+          className={styles.TreeItem} // Styles that makes the item look the way it does.
+          ref={ref} style={style}>
           <Handle {...handleProps} />
           {onCollapse && (
             <Action
