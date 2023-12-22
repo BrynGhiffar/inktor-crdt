@@ -436,6 +436,17 @@ pub enum SVGObject {
     Group(SVGGroup)
 }
 
+impl SVGObject {
+    fn get_id(&self) -> &str {
+        match self {
+            Self::Circle(circle) => &circle.id,
+            Self::Rectangle(rect) => &rect.id,
+            Self::Group(grp) => &grp.id,
+            Self::Path(pth) => &pth.id
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Tsify, Clone)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct SVGDocInner {
@@ -449,6 +460,44 @@ pub struct SVGDoc {
 }
 
 impl SVGDoc {
+
+    // fn find_object_mut<'a>(&'a mut self) -> Option<&mut SVGObject> {
+    //     None
+    // }
+
+    // fn find_object_mut_aux<'a>(group: &'a mut SVGGroup, object_id: &'a str) -> Option<&'a mut SVGObject> {
+    //     None
+    // }
+
+    fn find_group_has_object_id<'a>(
+        &'a mut self, 
+        object_id: &'a str
+    ) -> Option<&'a mut SVGGroup> {
+        for children in self.inner.children.iter_mut() {
+            let SVGObject::Group(group) = children else { continue; };
+            if let Some(group) = Self::find_group_has_object_id_aux(group, object_id) {
+                return Some(group);
+            }
+        }
+        return None;
+    }
+
+    fn find_group_has_object_id_aux<'a>(
+        group: &'a mut SVGGroup, 
+        object_id: &'a str
+    ) -> Option<&'a mut SVGGroup> {
+        for children in group.children.iter() {
+            if children.get_id().eq(object_id) { return Some(group); }
+        }
+        for children in group.children.iter_mut() {
+            let SVGObject::Group(cgroup) = children else { continue; };
+            if let Some(cgroup) = Self::find_group_has_object_id_aux(cgroup, object_id) {
+                return Some(cgroup);
+            }
+        }
+        return None;
+    }
+
     fn find_group_mut_aux<'a>(group: &'a mut SVGGroup, group_id: &'a str) -> Option<&'a mut SVGGroup> {
         for children in group.children.iter_mut() {
             let child = match children {
@@ -845,6 +894,75 @@ impl SVGDoc {
                 path.points.push(SVGPathCommand::BezierQuadReflect { id: gen_str_id(), pos });
             }
         };
+    }
+
+    pub fn move_object_to_group(&mut self, object_id: String, group_id: String, index: usize) {
+        let rootIndex = self.inner.children.iter().position(|o: &SVGObject| o.get_id().eq(&object_id));
+        if let Some(old_index) = rootIndex {
+            let object = self.inner.children.remove(old_index);
+            let Some(new_group) = self.find_group_mut(&group_id) else { return; };
+            if index < new_group.children.len() {
+                new_group.children.insert(index, object);
+            } else {
+                new_group.children.push(object);
+            }
+            return;
+        }
+        let group = self.find_group_has_object_id(&object_id);
+        if let Some(group) = group {
+            let groupIndex = group.children.iter().position(|o| o.get_id().eq(&object_id));
+            let Some(old_index) = groupIndex else { return; };
+            let object = group.children.remove(old_index);
+            let Some(new_group) = self.find_group_mut(&group_id) else { return; };
+            if index < new_group.children.len() {
+                new_group.children.insert(index, object);
+            } else {
+                new_group.children.push(object);
+            }
+            return;
+        };
+    }
+
+    pub fn move_object_to_root(&mut self, object_id: String, index: usize) {
+        let rootIndex = self.inner.children.iter().position(|o: &SVGObject| o.get_id().eq(&object_id));
+        if let Some(old_index) = rootIndex {
+            let object = self.inner.children.remove(old_index);
+            if index < self.inner.children.len() {
+                self.inner.children.insert(index, object);
+            } else {
+                self.inner.children.push(object);
+            }
+            return;
+        }
+        let group = self.find_group_has_object_id(&object_id);
+        if let Some(group) = group {
+            let groupIndex = group.children.iter().position(|o| o.get_id().eq(&object_id));
+            let Some(old_index) = groupIndex else { return; };
+            let object = group.children.remove(old_index);
+            if index < self.inner.children.len() {
+                self.inner.children.insert(index, object);
+            } else {
+                self.inner.children.push(object);
+            }
+            return;
+        };
+    }
+
+    pub fn remove_object(&mut self, object_id: String) {
+        let index = self.inner.children
+            .iter()
+            .position(|o| o.get_id().eq(&object_id));
+        if let Some(index) = index {
+            self.inner.children.remove(index);
+            return;
+        }
+        let group = self.find_group_has_object_id(&object_id);
+        if let Some(group) = group {
+            let index = group.children.iter()
+                .position(|o| o.get_id().eq(&object_id));
+            let Some(index) = index else { return; };
+            group.children.remove(index);
+        }
     }
 
     pub fn children(&self) -> SVGDocInner {

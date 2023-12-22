@@ -287,6 +287,11 @@ const ConfigurationGroup: FC<ConfigurationGroupProps> = (props) => {
         props.docRef.current.add_path(props.data.id, {});
         props.fetchSVGDoc();
     }, [props]);
+
+    const onClickDelete = useCallback(() => {
+        props.docRef.current.remove_object(props.data.id);
+        props.fetchSVGDoc();
+    }, [props]);
     return (
         <>
             <button
@@ -307,6 +312,9 @@ const ConfigurationGroup: FC<ConfigurationGroupProps> = (props) => {
             <button
                 onClick={onClickAddPath}
             >Add Path</button>
+            <button
+                onClick={onClickDelete}
+            >Delete</button>
         </>
     );
 }

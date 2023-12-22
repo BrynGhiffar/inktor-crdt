@@ -260,7 +260,7 @@ const GroupCloseCode: FC<GroupCloseCodeProps> = (props) => {
     setNodeRef,
     transform,
     transition
-  } = useSortable({ id: props.id });
+  } = useSortable({ id: props.id, disabled: true });
   const [selectedObject, setSelectedObject] = props.selectedObjectState;
   const background = isObjectSelected(realId, selectedObject) ? selectedColor : unselectedColor;
   const onClick = useCallback(() => setSelectedObject({ type: "GROUP", id: realId }), [realId, setSelectedObject]);
@@ -468,8 +468,6 @@ const getIndexInGroup = (
   id: string, 
   flattenTree: DroppableSVG[]
 ): number | null => {
-  // return null if groupId does not exist.
-  // return null if id does not exist.
   const groupIdIndex = groupId === "root" ? -1 : flattenTree.findIndex(item => item.id === groupId);
   const groupIdEndIndex = groupId === "root" ? flattenTree.length :flattenTree.findIndex(item => item.id === `END_${groupId}`);
   if (groupIdIndex === -1 && groupId !== "root") return null;
@@ -518,23 +516,45 @@ function App() {
     const overId = event.over.id;
     if (typeof activeId !== 'string') return;
     if (typeof overId !== 'string') return;
-    const overIndex = droppableSVG.findIndex(it => it.id === overId);
-    const activeIndex = droppableSVG.findIndex(it => it.id === activeId);
-    const addOne = activeIndex < overIndex ? 1 : 0;
-    const mockArray: DroppableSVG[] = [
-      ...droppableSVG.slice(0, overIndex + addOne), 
-      { type: "CIRCLE_TAG", id: "TARGET", depth: 0 },
-      ...droppableSVG.slice(overIndex + addOne)
-    ];
+    const oldActiveIndex = droppableSVG.findIndex(it => it.id === activeId);
+    const oldOverIndex = droppableSVG.findIndex(it => it.id === overId);
+
+    let oldActiveEndIndex = droppableSVG.findIndex(it => it.id === `END_${activeId}`);
+    if (oldActiveEndIndex === -1) {
+      oldActiveEndIndex = oldActiveIndex;
+    }
+    let mockA = [...droppableSVG];
+    if (oldActiveIndex < oldOverIndex) {
+      mockA = [
+        ...mockA.slice(0, oldActiveIndex),
+        ...mockA.slice(oldActiveEndIndex + 1, oldOverIndex + 1),
+        { type: "CIRCLE_TAG", id: "TARGET", depth: 0 },
+        ...Array(oldActiveEndIndex - oldActiveIndex).fill({ type: "CIRCLE_TAG", id: "_", depth: 0 }),
+        ...mockA.slice(oldOverIndex + 1)
+      ]
+    } else {
+      mockA = [
+        ...mockA.slice(0, oldOverIndex),
+        { type: "CIRCLE_TAG", id: "TARGET", depth: 0 },
+        ...Array(oldActiveEndIndex - oldActiveIndex).fill({ type: "CIRCLE_TAG", id: "_", depth: 0 }),
+        ...mockA.slice(oldOverIndex, oldActiveIndex),
+        ...mockA.slice(oldActiveEndIndex + 1)
+      ]
+    }
+    const mockArray = mockA;
     const overGroupId = getGroupId("TARGET", mockArray);
     if (overGroupId === null) return;
     const overIndexInGroup = getIndexInGroup(overGroupId, "TARGET", mockArray);
     if (overIndexInGroup === null) {
       return;
     }
-
-    console.log(`Move ${activeId} to group ${overGroupId}, index ${overIndexInGroup}`);
-
+    // console.log(`Move ${activeId} to group ${overGroupId}, index ${overIndexInGroup}`);
+    if (overGroupId === "root") {
+      SVGDocRef.current.move_object_to_root(activeId, overIndexInGroup);
+    } else {
+      SVGDocRef.current.move_object_to_group(activeId, overGroupId, overIndexInGroup);
+    }
+    fetchSVGDoc();
   }, [droppableSVG]);
   const background = "root" === selectedObject ? selectedColor : unselectedColor;
   const style: CSSProperties = { background, cursor: "pointer" };
