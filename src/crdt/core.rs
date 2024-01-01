@@ -1,29 +1,112 @@
-#![allow(nonstandard_style)]
-pub mod prelude;
-pub mod utility;
-pub mod element;
-pub mod crdt;
+use crate::prelude::*;
 
-use prelude::*;
 
-#[wasm_bindgen]
-pub struct SVGDoc {
-    tree: SVGDocCrdt,
+pub(crate) enum SVGCrdtOps {
+    CreateRectangle { 
+        rect_id: String,
+        group_id: Option<String>,
+        partial: PartialSVGRectangle,
+        timestamp: UnixEpochTimeNanos,
+    },
+    EditRectangle {
+        rectangle_id: String,
+        partial: PartialSVGRectangle,
+        timestamp: UnixEpochTimeNanos
+    },
+    CreateCircle {
+        circle_id: String,
+        group_id: Option<String>,
+        partial: PartialSVGCircle,
+        timestamp: UnixEpochTimeNanos
+    },
+    EditCircle {
+        circle_id: String,
+        partial: PartialSVGCircle,
+        timestamp: UnixEpochTimeNanos
+    },
+    CreatePath {
+        path_id: String,
+        group_id: Option<String>,
+        partial: PartialSVGPath,
+        timestamp: UnixEpochTimeNanos
+    },
+    EditPath {
+        path_id: String,
+        partial: PartialSVGPath,
+        timestamp: UnixEpochTimeNanos,
+        
+    },
+    AddPointToPath {
+        path_id: String,
+        command: SVGPathCommandType,
+        pos: Vec2,
+        timestamp: UnixEpochTimeNanos
+    },
+    EditPathPointType {
+        path_id: String,
+        point_id: String,
+        command_type: SVGPathCommandType,
+        timestamp: UnixEpochTimeNanos
+    },
+    EditPathPointPos {
+        path_id: String,
+        point_id: String,
+        new_pos: Vec2,
+        timestamp: UnixEpochTimeNanos
+    },
+    EditPathPointHandle1 {
+        path_id: String,
+        point_id: String,
+        new_handle1: Vec2,
+        timestamp: UnixEpochTimeNanos
+    },
+    EditPathPointHandle2 {
+        path_id: String,
+        point_id: String,
+        new_handl2: Vec2,
+        timestamp: UnixEpochTimeNanos
+    },
+    MoveObjectToGroup {
+        object_id: String,
+        group_id: Option<String>,
+        timestamp: UnixEpochTimeNanos
+    },
+    RemoveObject {
+        object_id: String,
+        timestamp: UnixEpochTimeNanos
+    }
 }
 
+pub(crate) struct SVGDocCrdt {
+    todo: VecDeque<SVGCrdtOps>,
+    history: Vec<SVGCrdtOps>,
+    // last_timestamp: UnixEpochTimeNanos, // the time of the last executed operation
+    tree: SVGDocTree
+}
 
-#[wasm_bindgen]
-impl SVGDoc {
+impl SVGDocCrdt {
     pub fn new() -> Self {
-        return SVGDoc { tree: SVGDocCrdt::new() };
+        return Self { 
+            tree: SVGDocTree { children: Vec::new() },
+            todo: VecDeque::new(),
+            history: Vec::new(),
+        };
     }
 
     pub fn get_group(&self, group_id: String) -> Option<SVGGroup> {
-        return self.tree.get_group(group_id);
+        let group = self.tree.find_group(&group_id);
+        return group.map(|g| g.clone());
     }
 
     pub fn add_group(&mut self, group_id: Option<String>, partial_group: PartialSVGGroup) {
-        self.tree.add_group(group_id, partial_group);
+        let mut new_group = SVGGroup::default();
+        new_group.apply_some(partial_group);
+        if let Some(group_id) = group_id {
+            let Some(group) = self.tree.find_group_mut(&group_id) else { return; };
+            group.children.push(SVGObject::Group(new_group));
+            return;
+        }
+        self.tree.children.push(SVGObject::Group(new_group));
     }
 
     pub fn get_circle(&self, circle_id: String) -> Option<SVGCircle>{
