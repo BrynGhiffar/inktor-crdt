@@ -19,73 +19,47 @@ impl SVGDoc {
     }
 
     pub fn get_group(&self, group_id: String) -> Option<SVGGroup> {
-        return self.tree.get_group(group_id);
+        self.tree.get_group(group_id)
     }
 
     pub fn add_group(&mut self, group_id: Option<String>, partial_group: PartialSVGGroup) {
-        self.tree.add_group(group_id, partial_group);
+        self.tree.add_group(group_id, partial_group)
     }
 
     pub fn get_circle(&self, circle_id: String) -> Option<SVGCircle>{
-        return self.tree.find_circle(&circle_id).map(|c| c.clone());
+        self.tree.get_circle(circle_id)
     }
 
     pub fn add_circle(&mut self, group_id: Option<String>, partial_circle: PartialSVGCircle) {
-        let mut circle = SVGCircle::default();
-        circle.apply_some(partial_circle);
-        if let Some(group_id) = group_id {
-            let Some(group) = self.tree.find_group_mut(&group_id) else { return; };
-            group.children.push(SVGObject::Circle(circle));
-            return;
-        }
-        self.tree.children.push(SVGObject::Circle(circle));
+        self.tree.add_circle(group_id, partial_circle);
     }
 
     pub fn edit_circle(&mut self, circle_id: String, edits: PartialSVGCircle) {
-        let Some(circle) = self.tree.find_circle_mut(&circle_id) else { return; };
-        circle.apply_some(edits);
+        self.tree.edit_circle(circle_id, edits);
     }
 
     pub fn get_rectangle(&self, rectangle_id: String) -> Option<SVGRectangle> {
-        let rectangle = self.tree.find_rectangle(&rectangle_id);
-        return rectangle.map(|r| r.clone());
+        self.tree.get_rectangle(rectangle_id)
     }
 
     pub fn add_rectangle(&mut self, group_id: Option<String>, partial_rectangle: PartialSVGRectangle) {
-        let mut rectangle = SVGRectangle::default();
-        rectangle.apply_some(partial_rectangle);
-        if let Some(group_id) = group_id {
-            let Some(group) = self.tree.find_group_mut(&group_id) else { return; };
-            group.children.push(SVGObject::Rectangle(rectangle));
-            return;
-        }
-        self.tree.children.push(SVGObject::Rectangle(rectangle));
+        self.tree.add_rectangle(group_id, partial_rectangle)
     }
 
     pub fn edit_rectangle(&mut self, rectangle_id: String, edits: PartialSVGRectangle) {
-        let Some(rectangle) = self.tree.find_rectangle_mut(&rectangle_id) else { return; };
-        rectangle.apply_some(edits);
+        self.tree.edit_rectangle(rectangle_id, edits)
     }
 
     pub fn get_path(&self, path_id: String) -> Option<SVGPath> {
-        let path = self.tree.find_path(&path_id);
-        return path.map(|p| p.clone());
+        self.tree.get_path(path_id)
     }
 
     pub fn add_path(&mut self, group_id: Option<String>, partial_path: PartialSVGPath) {
-        let mut path = SVGPath::default();
-        path.apply_some(partial_path);
-        if let Some(group_id) = group_id {
-            let Some(group) = self.tree.find_group_mut(&group_id) else { return; };
-            group.children.push(SVGObject::Path(path));
-            return;
-        }
-        self.tree.children.push(SVGObject::Path(path));
+        self.tree.add_path(group_id, partial_path)
     }
 
     pub fn edit_path(&mut self, path_id: String, partial_path: PartialSVGPath) {
-        let Some(path) = self.tree.find_path_mut(&path_id) else { return; };
-        path.apply_some(partial_path);
+        self.tree.edit_path(path_id, partial_path)
     }
 
     pub fn edit_path_point_type(
@@ -94,189 +68,86 @@ impl SVGDoc {
         point_id: String, 
         command_type: SVGPathCommandType, 
     ) {
-        let Some(path) = self.tree.find_path_mut(&path_id) else { return; };
-        let Some(point) = path.find_point_mut(&point_id) else { return; };
-        let pos = Vec2 { x: 0, y: 0 };
-        let command = match command_type {
-            SVGPathCommandType::START => SVGPathCommand::Start { id: gen_str_id(), pos },
-            SVGPathCommandType::LINE => SVGPathCommand::Line { id: gen_str_id(), pos },
-            SVGPathCommandType::CLOSE => SVGPathCommand::Close { id: gen_str_id() },
-            SVGPathCommandType::BEZIER => {
-                let handle1 = Vec2 { x: pos.x + 20, y: pos.y + 20 };
-                let handle2 = Vec2 { x: pos.x + 20, y: pos.y - 20 };
-                SVGPathCommand::Bezier { id: gen_str_id(), handle1, handle2, pos }
-            },
-            SVGPathCommandType::BEZIER_REFLECT => {
-                let handle = Vec2 { x: pos.x, y: pos.y + 20 };
-                SVGPathCommand::BezierReflect { id: gen_str_id(), handle, pos }
-            },
-            SVGPathCommandType::BEZIER_QUAD => {
-                let handle = Vec2 { x: pos.x, y: pos.y + 20 };
-                SVGPathCommand::BezierQuad { id: gen_str_id(), handle, pos }
-            },
-            SVGPathCommandType::BEZIER_QUAD_REFLECT => {
-                SVGPathCommand::BezierQuadReflect { id: gen_str_id(), pos }
-            }
-        };
-        *point = command;
+        self.tree.edit_path_point_type(path_id, point_id, command_type)
     }
 
-    pub fn edit_path_point_pos(&mut self, path_id: String, point_id: String, new_pos: Vec2) {
-        let Some(path) = self.tree.find_path_mut(&path_id) else { return; };
-        let Some(point) = path.find_point_mut(&point_id) else { return; };
-        match point {
-            SVGPathCommand::Start { pos, .. } => {
-                *pos = new_pos;
-            },
-            SVGPathCommand::Line { pos, .. } => {
-                *pos = new_pos;
-            },
-            SVGPathCommand::Bezier { pos, .. } => {
-                *pos = new_pos;
-            },
-            SVGPathCommand::BezierQuad { pos, .. } => {
-                *pos = new_pos;
-            },
-            SVGPathCommand::BezierQuadReflect { pos, .. } => {
-                *pos = new_pos;
-            },
-            _ => ()
-        };
+    pub fn edit_path_point_pos(
+        &mut self, 
+        path_id: String, 
+        point_id: String, 
+        new_pos: Vec2
+    ) {
+        self.tree.edit_path_point_pos(path_id, point_id, new_pos)
     }
 
-    pub fn edit_path_point_handle1(&mut self, path_id: String, point_id: String, new_handle1: Vec2) {
-        let Some(path) = self.tree.find_path_mut(&path_id) else { return; };
-        let Some(point) = path.find_point_mut(&point_id) else { return; };
-        match point {
-            SVGPathCommand::Bezier { handle1, .. } => {
-                *handle1 = new_handle1;
-            },
-            SVGPathCommand::BezierReflect { handle, .. } => {
-                *handle = new_handle1;
-            },
-            SVGPathCommand::BezierQuad { handle, .. } => {
-                *handle = new_handle1;
-            },
-            _ => ()
-        }
+    pub fn edit_path_point_handle1(
+        &mut self, 
+        path_id: String, 
+        point_id: String, 
+        new_handle1: Vec2
+    ) {
+        self.tree.edit_path_point_handle1(path_id, point_id, new_handle1)
     }
 
-    pub fn edit_path_point_handle2(&mut self, path_id: String, point_id: String, new_handle2: Vec2) {
-        let Some(path) = self.tree.find_path_mut(&path_id) else { return; };
-        let Some(point) = path.find_point_mut(&point_id) else { return; };
-        match point {
-            SVGPathCommand::Bezier { handle2, .. } => {
-                *handle2 = new_handle2;
-            },
-            _ => ()
-        };
+    pub fn edit_path_point_handle2(
+        &mut self, 
+        path_id: String, 
+        point_id: String, 
+        new_handle2: Vec2
+    ) {
+        self.tree.edit_path_point_handle2(path_id, point_id, new_handle2)
     }
 
-    pub fn add_point_to_path(&mut self, path_id: String, command: SVGPathCommandType, pos: Vec2) {
-        let Some(path) = self.tree.find_path_mut(&path_id) else { return; };
-        match command {
-            SVGPathCommandType::START => {
-                path.points.push(SVGPathCommand::Start { id: gen_str_id(), pos });
-            },
-            SVGPathCommandType::LINE => {
-                path.points.push(SVGPathCommand::Line { id: gen_str_id(), pos });
-            },
-            SVGPathCommandType::CLOSE => {
-                path.points.push(SVGPathCommand::Close { id: gen_str_id() });
-            },
-            SVGPathCommandType::BEZIER => {
-                let handle1 = Vec2 { x: pos.x + 20, y: pos.y + 20 };
-                let handle2 = Vec2 { x: pos.x + 20, y: pos.y - 20 };
-                path.points.push(SVGPathCommand::Bezier { id: gen_str_id(), handle1, handle2, pos });
-            },
-            SVGPathCommandType::BEZIER_REFLECT => {
-                let handle = Vec2 { x: pos.x, y: pos.y + 20 };
-                path.points.push(SVGPathCommand::BezierReflect { id: gen_str_id(), handle, pos });
-            },
-            SVGPathCommandType::BEZIER_QUAD => {
-                let handle = Vec2 { x: pos.x, y: pos.y + 20 };
-                path.points.push(SVGPathCommand::BezierQuad { id: gen_str_id(), handle, pos });
-            },
-            SVGPathCommandType::BEZIER_QUAD_REFLECT => {
-                path.points.push(SVGPathCommand::BezierQuadReflect { id: gen_str_id(), pos });
-            }
-        };
+    pub fn add_point_to_path(
+        &mut self, 
+        path_id: String, 
+        command: SVGPathCommandType, 
+        pos: Vec2
+    ) {
+        self.tree.add_point_to_path(path_id, command, pos)
     }
 
-    pub fn move_object_to_group(&mut self, object_id: String, group_id: String, index: usize) {
-        let rootIndex = self.tree.children.iter().position(|o: &SVGObject| o.get_id().eq(&object_id));
-        if let Some(old_index) = rootIndex {
-            let object = self.tree.children.remove(old_index);
-            let Some(new_group) = self.tree.find_group_mut(&group_id) else { return; };
-            if index < new_group.children.len() {
-                new_group.children.insert(index, object);
-            } else {
-                new_group.children.push(object);
-            }
-            return;
-        }
-        let group = self.tree.find_group_has_object_id(&object_id);
-        if let Some(group) = group {
-            let groupIndex = group.children.iter().position(|o| o.get_id().eq(&object_id));
-            let Some(old_index) = groupIndex else { return; };
-            let object = group.children.remove(old_index);
-            let Some(new_group) = self.tree.find_group_mut(&group_id) else { return; };
-            if index < new_group.children.len() {
-                new_group.children.insert(index, object);
-            } else {
-                new_group.children.push(object);
-            }
-            return;
-        };
+    pub fn move_object_to_group(
+        &mut self, 
+        object_id: String, 
+        group_id: String, 
+        index: usize
+    ) {
+        self.tree.move_object_to_group(object_id, group_id, index)
     }
 
     pub fn move_object_to_root(&mut self, object_id: String, index: usize) {
-        let rootIndex = self.tree.children.iter().position(|o: &SVGObject| o.get_id().eq(&object_id));
-        if let Some(old_index) = rootIndex {
-            let object = self.tree.children.remove(old_index);
-            if index < self.tree.children.len() {
-                self.tree.children.insert(index, object);
-            } else {
-                self.tree.children.push(object);
-            }
-            return;
-        }
-        let group = self.tree.find_group_has_object_id(&object_id);
-        if let Some(group) = group {
-            let groupIndex = group.children.iter().position(|o| o.get_id().eq(&object_id));
-            let Some(old_index) = groupIndex else { return; };
-            let object = group.children.remove(old_index);
-            if index < self.tree.children.len() {
-                self.tree.children.insert(index, object);
-            } else {
-                self.tree.children.push(object);
-            }
-            return;
-        };
+        self.tree.move_object_to_root(object_id, index)
     }
 
     pub fn remove_object(&mut self, object_id: String) {
-        let index = self.tree.children
-            .iter()
-            .position(|o| o.get_id().eq(&object_id));
-        if let Some(index) = index {
-            self.tree.children.remove(index);
-            return;
-        }
-        let group = self.tree.find_group_has_object_id(&object_id);
-        if let Some(group) = group {
-            let index = group.children.iter()
-                .position(|o| o.get_id().eq(&object_id));
-            let Some(index) = index else { return; };
-            group.children.remove(index);
-        }
+        self.tree.remove_object(object_id)
+    }
+
+    pub fn remove_path_point(
+        &mut self, 
+        path_id: String,
+        point_id: String
+    ) {
+        self.tree.remove_path_point(path_id, point_id)
+    }
+
+    pub fn save(&self) -> Option<String> {
+        self.tree.save_oplog()
+    }
+
+    pub fn merge(&mut self, oplog: String) {
+        let oplog = serde_json::from_str::<Vec<SVGCrdtOps>>(&oplog).ok();
+        let Some(oplog) = oplog else { return; };
+        self.tree.merge(oplog);
     }
 
     pub fn children(&self) -> SVGDocTree {
-        return self.tree.clone();
+        console_log!("Get Children");
+        self.tree.children()
     }
 
     pub fn repr(&self) -> String {
-        return serde_json::to_string(&self.tree).unwrap();
+        self.tree.repr()
     }
 }

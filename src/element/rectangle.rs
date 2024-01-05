@@ -3,33 +3,33 @@ use crate::prelude::*;
 #[derive(Serialize, Deserialize, Tsify, Clone)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct SVGRectangle {
-    pub(crate) id: String,
-    pub(crate) pos: Vec2,
-    pub(crate) height: i32,
-    pub(crate) width: i32,
-    pub(crate) fill: Color,
-    pub(crate) stroke_width: i32,
-    pub(crate) stroke: Color,
-    pub(crate) opacity: f32
+    pub id: String,
+    pub pos: Vec2,
+    pub height: i32,
+    pub width: i32,
+    pub fill: Color,
+    pub stroke_width: i32,
+    pub stroke: Color,
+    pub opacity: f32
 }
 
 #[derive(Serialize, Deserialize, Tsify, Clone)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct PartialSVGRectangle {
     #[tsify(optional)]
-    pos: Option<Vec2>,
+    pub pos: Option<Vec2>,
     #[tsify(optional)]
-    height: Option<i32>,
+    pub height: Option<i32>,
     #[tsify(optional)]
-    width: Option<i32>,
+    pub width: Option<i32>,
     #[tsify(optional)]
-    fill: Option<Color>,
+    pub fill: Option<Color>,
     #[tsify(optional)]
-    stroke_width: Option<i32>,
+    pub stroke_width: Option<i32>,
     #[tsify(optional)]
-    stroke: Option<Color>,
+    pub stroke: Option<Color>,
     #[tsify(optional)]
-    opacity: Option<f32>
+    pub opacity: Option<f32>
 }
 
 impl partially::Partial for SVGRectangle {

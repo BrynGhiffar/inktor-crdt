@@ -1,22 +1,36 @@
 use crate::prelude::*;
 
-
+#[derive(Clone, Serialize, Deserialize)]
 pub(crate) enum SVGCrdtOps {
-    CreateRectangle { 
+    AddGroup {
+        group_id: Option<String>,
+        new_group_id: String,
+        partial_group: PartialSVGGroup,
+        timestamp: UnixEpochTimeNanos,
+    },
+    AddRectangle { 
         rect_id: String,
         group_id: Option<String>,
         partial: PartialSVGRectangle,
         timestamp: UnixEpochTimeNanos,
     },
-    EditRectangle {
-        rectangle_id: String,
-        partial: PartialSVGRectangle,
-        timestamp: UnixEpochTimeNanos
-    },
-    CreateCircle {
+    AddCircle {
         circle_id: String,
         group_id: Option<String>,
         partial: PartialSVGCircle,
+        timestamp: UnixEpochTimeNanos
+    },
+    AddPath {
+        path_id: String,
+        group_id: Option<String>,
+        partial: PartialSVGPath,
+        timestamp: UnixEpochTimeNanos
+    },
+    AddPointToPath {
+        path_id: String,
+        point_id: String,
+        command: SVGPathCommandType,
+        pos: Vec2,
         timestamp: UnixEpochTimeNanos
     },
     EditCircle {
@@ -24,10 +38,9 @@ pub(crate) enum SVGCrdtOps {
         partial: PartialSVGCircle,
         timestamp: UnixEpochTimeNanos
     },
-    CreatePath {
-        path_id: String,
-        group_id: Option<String>,
-        partial: PartialSVGPath,
+    EditRectangle {
+        rectangle_id: String,
+        partial: PartialSVGRectangle,
         timestamp: UnixEpochTimeNanos
     },
     EditPath {
@@ -35,12 +48,6 @@ pub(crate) enum SVGCrdtOps {
         partial: PartialSVGPath,
         timestamp: UnixEpochTimeNanos,
         
-    },
-    AddPointToPath {
-        path_id: String,
-        command: SVGPathCommandType,
-        pos: Vec2,
-        timestamp: UnixEpochTimeNanos
     },
     EditPathPointType {
         path_id: String,
@@ -63,17 +70,32 @@ pub(crate) enum SVGCrdtOps {
     EditPathPointHandle2 {
         path_id: String,
         point_id: String,
-        new_handl2: Vec2,
+        new_handle2: Vec2,
         timestamp: UnixEpochTimeNanos
     },
     MoveObjectToGroup {
         object_id: String,
         group_id: Option<String>,
+        index: usize,
         timestamp: UnixEpochTimeNanos
     },
     RemoveObject {
         object_id: String,
         timestamp: UnixEpochTimeNanos
+    },
+    RemovePathPoint {
+        path_id: String,
+        point_id: String,
+        timestamp: UnixEpochTimeNanos
+    }
+}
+
+impl SVGCrdtOps {
+    pub(crate) fn get_timestamp(&self) -> UnixEpochTimeNanos {
+        match *self {
+            Self::AddGroup { timestamp, .. } => timestamp,
+            _ => todo!()
+        }
     }
 }
 
@@ -85,21 +107,79 @@ pub(crate) struct SVGDocCrdt {
 }
 
 impl SVGDocCrdt {
-    pub fn new() -> Self {
-        return Self { 
-            tree: SVGDocTree { children: Vec::new() },
-            todo: VecDeque::new(),
-            history: Vec::new(),
-        };
+    fn do_mut_op(&mut self, op: SVGCrdtOps) {
+        match op {
+            SVGCrdtOps::AddGroup { group_id, new_group_id, partial_group, .. } => {
+                self.do_add_group_op(group_id, new_group_id, partial_group)
+            },
+            SVGCrdtOps::AddCircle { circle_id, group_id, partial, .. } => {
+                self.do_add_circle_op(circle_id, group_id, partial)
+            },
+            SVGCrdtOps::AddRectangle { rect_id, group_id, partial, .. } => {
+                self.do_add_rectangle_op(rect_id, group_id, partial)
+            },
+            SVGCrdtOps::AddPath { path_id, group_id, partial, .. } => {
+                self.do_add_path_op(path_id, group_id, partial)
+            },
+            SVGCrdtOps::AddPointToPath { path_id, point_id, command, pos, .. } => {
+                self.do_add_point_to_path_op(path_id, point_id, command, pos)
+            },
+            SVGCrdtOps::EditCircle { circle_id, partial, .. } => {
+                self.do_edit_circle_op(circle_id, partial);
+            },
+            SVGCrdtOps::EditRectangle { rectangle_id, partial: edits, .. } => {
+                self.do_edit_rectangle_op(rectangle_id, edits)
+            },
+            SVGCrdtOps::EditPath { path_id, partial, .. } => {
+                self.do_edit_path_op(path_id, partial)
+            },
+            SVGCrdtOps::EditPathPointType { path_id, point_id, command_type, .. } => {
+                self.do_edit_path_point_type_op(path_id, point_id, command_type)
+            },
+            SVGCrdtOps::EditPathPointPos { path_id, point_id, new_pos, .. } => {
+                self.do_edit_path_point_pos_op(path_id, point_id, new_pos);
+            },
+            SVGCrdtOps::EditPathPointHandle1 { path_id, point_id, new_handle1, .. } => {
+                self.do_edit_path_point_handle1_op(path_id, point_id, new_handle1);
+            },
+            SVGCrdtOps::EditPathPointHandle2 { path_id, point_id, new_handle2, .. } => {
+                self.do_edit_path_point_handle2_op(path_id, point_id, new_handle2);
+            },
+            SVGCrdtOps::MoveObjectToGroup { object_id, group_id, index, .. } => {
+                if let Some(group_id) = group_id {
+                    self.do_move_object_to_group_op(object_id, group_id, index);
+                } else {
+                    self.do_move_object_to_root_op(object_id, index);
+                }
+            },
+            SVGCrdtOps::RemoveObject { object_id, .. } => {
+                self.do_remove_object_op(object_id)
+            },
+            SVGCrdtOps::RemovePathPoint { path_id, point_id, .. } => {
+                self.do_remove_path_point_op(path_id, point_id)
+            }
+        }
     }
 
-    pub fn get_group(&self, group_id: String) -> Option<SVGGroup> {
-        let group = self.tree.find_group(&group_id);
-        return group.map(|g| g.clone());
+    fn execute_all_todo(&mut self) {
+        while let Some(op) = self.todo.pop_front() {
+            self.do_mut_op(op.clone());
+            self.history.push(op);
+        }
     }
+}
 
-    pub fn add_group(&mut self, group_id: Option<String>, partial_group: PartialSVGGroup) {
+
+// do_ operations
+impl SVGDocCrdt {
+    fn do_add_group_op(
+        &mut self, 
+        group_id: Option<String>,
+        new_group_id: String,
+        partial_group: PartialSVGGroup
+    ) {
         let mut new_group = SVGGroup::default();
+        new_group.id = new_group_id;
         new_group.apply_some(partial_group);
         if let Some(group_id) = group_id {
             let Some(group) = self.tree.find_group_mut(&group_id) else { return; };
@@ -109,12 +189,14 @@ impl SVGDocCrdt {
         self.tree.children.push(SVGObject::Group(new_group));
     }
 
-    pub fn get_circle(&self, circle_id: String) -> Option<SVGCircle>{
-        return self.tree.find_circle(&circle_id).map(|c| c.clone());
-    }
-
-    pub fn add_circle(&mut self, group_id: Option<String>, partial_circle: PartialSVGCircle) {
+    fn do_add_circle_op(
+        &mut self,
+        circle_id: String,
+        group_id: Option<String>,
+        partial_circle: PartialSVGCircle
+    ) {
         let mut circle = SVGCircle::default();
+        circle.id = circle_id;
         circle.apply_some(partial_circle);
         if let Some(group_id) = group_id {
             let Some(group) = self.tree.find_group_mut(&group_id) else { return; };
@@ -124,18 +206,14 @@ impl SVGDocCrdt {
         self.tree.children.push(SVGObject::Circle(circle));
     }
 
-    pub fn edit_circle(&mut self, circle_id: String, edits: PartialSVGCircle) {
-        let Some(circle) = self.tree.find_circle_mut(&circle_id) else { return; };
-        circle.apply_some(edits);
-    }
-
-    pub fn get_rectangle(&self, rectangle_id: String) -> Option<SVGRectangle> {
-        let rectangle = self.tree.find_rectangle(&rectangle_id);
-        return rectangle.map(|r| r.clone());
-    }
-
-    pub fn add_rectangle(&mut self, group_id: Option<String>, partial_rectangle: PartialSVGRectangle) {
+    fn do_add_rectangle_op(
+        &mut self,
+        rectangle_id: String,
+        group_id: Option<String>, 
+        partial_rectangle: PartialSVGRectangle
+    ) {
         let mut rectangle = SVGRectangle::default();
+        rectangle.id = rectangle_id;
         rectangle.apply_some(partial_rectangle);
         if let Some(group_id) = group_id {
             let Some(group) = self.tree.find_group_mut(&group_id) else { return; };
@@ -145,18 +223,14 @@ impl SVGDocCrdt {
         self.tree.children.push(SVGObject::Rectangle(rectangle));
     }
 
-    pub fn edit_rectangle(&mut self, rectangle_id: String, edits: PartialSVGRectangle) {
-        let Some(rectangle) = self.tree.find_rectangle_mut(&rectangle_id) else { return; };
-        rectangle.apply_some(edits);
-    }
-
-    pub fn get_path(&self, path_id: String) -> Option<SVGPath> {
-        let path = self.tree.find_path(&path_id);
-        return path.map(|p| p.clone());
-    }
-
-    pub fn add_path(&mut self, group_id: Option<String>, partial_path: PartialSVGPath) {
+    fn do_add_path_op(
+        &mut self,
+        path_id: String,
+        group_id: Option<String>,
+        partial_path: PartialSVGPath
+    ) {
         let mut path = SVGPath::default();
+        path.id = path_id;
         path.apply_some(partial_path);
         if let Some(group_id) = group_id {
             let Some(group) = self.tree.find_group_mut(&group_id) else { return; };
@@ -166,15 +240,74 @@ impl SVGDocCrdt {
         self.tree.children.push(SVGObject::Path(path));
     }
 
-    pub fn edit_path(&mut self, path_id: String, partial_path: PartialSVGPath) {
+    fn do_add_point_to_path_op(
+        &mut self,
+        path_id: String,
+        point_id: String,
+        command: SVGPathCommandType,
+        pos: Vec2
+    ) {
+        let Some(path) = self.tree.find_path_mut(&path_id) else { return; };
+        match command {
+            SVGPathCommandType::START => {
+                path.points.push(SVGPathCommand::Start { id: point_id, pos });
+            },
+            SVGPathCommandType::LINE => {
+                path.points.push(SVGPathCommand::Line { id: point_id, pos });
+            },
+            SVGPathCommandType::CLOSE => {
+                path.points.push(SVGPathCommand::Close { id: point_id });
+            },
+            SVGPathCommandType::BEZIER => {
+                let handle1 = Vec2 { x: pos.x + 20, y: pos.y + 20 };
+                let handle2 = Vec2 { x: pos.x + 20, y: pos.y - 20 };
+                path.points.push(SVGPathCommand::Bezier { id: point_id, handle1, handle2, pos });
+            },
+            SVGPathCommandType::BEZIER_REFLECT => {
+                let handle = Vec2 { x: pos.x, y: pos.y + 20 };
+                path.points.push(SVGPathCommand::BezierReflect { id: point_id, handle, pos });
+            },
+            SVGPathCommandType::BEZIER_QUAD => {
+                let handle = Vec2 { x: pos.x, y: pos.y + 20 };
+                path.points.push(SVGPathCommand::BezierQuad { id: point_id, handle, pos });
+            },
+            SVGPathCommandType::BEZIER_QUAD_REFLECT => {
+                path.points.push(SVGPathCommand::BezierQuadReflect { id: point_id, pos });
+            }
+        };
+    }
+
+    fn do_edit_circle_op(
+        &mut self, 
+        circle_id: String, 
+        edits: PartialSVGCircle
+    ) {
+        let Some(circle) = self.tree.find_circle_mut(&circle_id) else { return; };
+        circle.apply_some(edits);
+    }
+
+    fn do_edit_rectangle_op(
+        &mut self,
+        rectangle_id: String,
+        edits: PartialSVGRectangle
+    ) {
+        let Some(rectangle) = self.tree.find_rectangle_mut(&rectangle_id) else { return; };
+        rectangle.apply_some(edits);
+    }
+
+    fn do_edit_path_op(
+        &mut self,
+        path_id: String,
+        partial_path: PartialSVGPath
+    ) {
         let Some(path) = self.tree.find_path_mut(&path_id) else { return; };
         path.apply_some(partial_path);
     }
 
-    pub fn edit_path_point_type(
+    fn do_edit_path_point_type_op(
         &mut self, 
         path_id: String, 
-        point_id: String, 
+        point_id: String,
         command_type: SVGPathCommandType, 
     ) {
         let Some(path) = self.tree.find_path_mut(&path_id) else { return; };
@@ -204,7 +337,12 @@ impl SVGDocCrdt {
         *point = command;
     }
 
-    pub fn edit_path_point_pos(&mut self, path_id: String, point_id: String, new_pos: Vec2) {
+    fn do_edit_path_point_pos_op(
+        &mut self,
+        path_id: String,
+        point_id: String,
+        new_pos: Vec2
+    ) {
         let Some(path) = self.tree.find_path_mut(&path_id) else { return; };
         let Some(point) = path.find_point_mut(&point_id) else { return; };
         match point {
@@ -227,7 +365,12 @@ impl SVGDocCrdt {
         };
     }
 
-    pub fn edit_path_point_handle1(&mut self, path_id: String, point_id: String, new_handle1: Vec2) {
+    fn do_edit_path_point_handle1_op(
+        &mut self,
+        path_id: String,
+        point_id: String,
+        new_handle1: Vec2
+    ) {
         let Some(path) = self.tree.find_path_mut(&path_id) else { return; };
         let Some(point) = path.find_point_mut(&point_id) else { return; };
         match point {
@@ -244,7 +387,12 @@ impl SVGDocCrdt {
         }
     }
 
-    pub fn edit_path_point_handle2(&mut self, path_id: String, point_id: String, new_handle2: Vec2) {
+    fn do_edit_path_point_handle2_op(
+        &mut self,
+        path_id: String,
+        point_id: String,
+        new_handle2: Vec2
+    ) {
         let Some(path) = self.tree.find_path_mut(&path_id) else { return; };
         let Some(point) = path.find_point_mut(&point_id) else { return; };
         match point {
@@ -255,38 +403,12 @@ impl SVGDocCrdt {
         };
     }
 
-    pub fn add_point_to_path(&mut self, path_id: String, command: SVGPathCommandType, pos: Vec2) {
-        let Some(path) = self.tree.find_path_mut(&path_id) else { return; };
-        match command {
-            SVGPathCommandType::START => {
-                path.points.push(SVGPathCommand::Start { id: gen_str_id(), pos });
-            },
-            SVGPathCommandType::LINE => {
-                path.points.push(SVGPathCommand::Line { id: gen_str_id(), pos });
-            },
-            SVGPathCommandType::CLOSE => {
-                path.points.push(SVGPathCommand::Close { id: gen_str_id() });
-            },
-            SVGPathCommandType::BEZIER => {
-                let handle1 = Vec2 { x: pos.x + 20, y: pos.y + 20 };
-                let handle2 = Vec2 { x: pos.x + 20, y: pos.y - 20 };
-                path.points.push(SVGPathCommand::Bezier { id: gen_str_id(), handle1, handle2, pos });
-            },
-            SVGPathCommandType::BEZIER_REFLECT => {
-                let handle = Vec2 { x: pos.x, y: pos.y + 20 };
-                path.points.push(SVGPathCommand::BezierReflect { id: gen_str_id(), handle, pos });
-            },
-            SVGPathCommandType::BEZIER_QUAD => {
-                let handle = Vec2 { x: pos.x, y: pos.y + 20 };
-                path.points.push(SVGPathCommand::BezierQuad { id: gen_str_id(), handle, pos });
-            },
-            SVGPathCommandType::BEZIER_QUAD_REFLECT => {
-                path.points.push(SVGPathCommand::BezierQuadReflect { id: gen_str_id(), pos });
-            }
-        };
-    }
-
-    pub fn move_object_to_group(&mut self, object_id: String, group_id: String, index: usize) {
+    fn do_move_object_to_group_op(
+        &mut self, 
+        object_id: String, 
+        group_id: String, 
+        index: usize
+    ) {
         let rootIndex = self.tree.children.iter().position(|o: &SVGObject| o.get_id().eq(&object_id));
         if let Some(old_index) = rootIndex {
             let object = self.tree.children.remove(old_index);
@@ -313,7 +435,11 @@ impl SVGDocCrdt {
         };
     }
 
-    pub fn move_object_to_root(&mut self, object_id: String, index: usize) {
+    fn do_move_object_to_root_op(
+        &mut self,
+        object_id: String,
+        index: usize
+    ) {
         let rootIndex = self.tree.children.iter().position(|o: &SVGObject| o.get_id().eq(&object_id));
         if let Some(old_index) = rootIndex {
             let object = self.tree.children.remove(old_index);
@@ -338,7 +464,23 @@ impl SVGDocCrdt {
         };
     }
 
-    pub fn remove_object(&mut self, object_id: String) {
+    fn do_remove_path_point_op(
+        &mut self,
+        path_id: String,
+        point_id: String
+    ) {
+        let path = self.tree.find_path_mut(&path_id);
+        let Some(path) = path else { return; };
+        let index = path.points.iter()
+            .position(|o| o.get_id().eq(&point_id));
+        let Some(index) = index else { return; };
+        path.points.remove(index);
+    }
+
+    fn do_remove_object_op(
+        &mut self,
+        object_id: String,
+    ) {
         let index = self.tree.children
             .iter()
             .position(|o| o.get_id().eq(&object_id));
@@ -353,6 +495,307 @@ impl SVGDocCrdt {
             let Some(index) = index else { return; };
             group.children.remove(index);
         }
+    }
+}
+
+impl SVGDocCrdt {
+    pub fn new() -> Self {
+        return Self { 
+            tree: SVGDocTree::new(),
+            todo: VecDeque::new(),
+            history: Vec::new(),
+        };
+    }
+
+    pub fn get_group(&self, group_id: String) -> Option<SVGGroup> {
+        let group = self.tree.find_group(&group_id);
+        return group.map(|g| g.clone());
+    }
+
+    pub fn get_circle(&self, circle_id: String) -> Option<SVGCircle>{
+        return self.tree.find_circle(&circle_id).map(|c| c.clone());
+    }
+
+    pub fn get_rectangle(
+        &self, 
+        rectangle_id: String
+    ) -> Option<SVGRectangle> {
+        let rectangle = self.tree.find_rectangle(&rectangle_id);
+        return rectangle.map(|r| r.clone());
+    }
+
+    pub fn get_path(&self, path_id: String) -> Option<SVGPath> {
+        let path = self.tree.find_path(&path_id);
+        return path.map(|p| p.clone());
+    }
+
+    pub fn add_group(
+        &mut self, 
+        group_id: Option<String>, 
+        partial_group: PartialSVGGroup
+    ) {
+        let timestamp = epoch_now_nanos();
+        let new_group_id = gen_str_id();
+        self.todo.push_back(SVGCrdtOps::AddGroup { 
+            group_id, 
+            new_group_id,
+            partial_group, 
+            timestamp 
+        });
+        self.execute_all_todo()
+    }
+
+    pub fn add_circle(
+        &mut self, 
+        group_id: Option<String>, 
+        partial_circle: PartialSVGCircle
+    ) {
+        let timestamp = epoch_now_nanos();
+        let circle_id = gen_str_id();
+        self.todo.push_back(SVGCrdtOps::AddCircle { 
+            circle_id, 
+            group_id, 
+            partial: partial_circle, 
+            timestamp
+        });
+        self.execute_all_todo();
+    }
+
+    pub fn add_rectangle(
+        &mut self, 
+        group_id: Option<String>, 
+        partial_rectangle: PartialSVGRectangle
+    ) {
+        let timestamp = epoch_now_nanos();
+        let rect_id = gen_str_id();
+        self.todo.push_back(SVGCrdtOps::AddRectangle { 
+            rect_id, 
+            group_id, 
+            partial: partial_rectangle, 
+            timestamp 
+        });
+        self.execute_all_todo();
+    }
+
+    pub fn edit_circle(
+        &mut self, 
+        circle_id: String, 
+        edits: PartialSVGCircle
+    ) {
+        let timestamp = epoch_now_nanos();
+        self.todo.push_back(SVGCrdtOps::EditCircle { 
+            circle_id, 
+            partial: edits, 
+            timestamp
+        });
+        self.execute_all_todo();
+    }
+
+    pub fn edit_rectangle(
+        &mut self, 
+        rectangle_id: String, 
+        edits: PartialSVGRectangle
+    ) {
+        let timestamp = epoch_now_nanos();
+        self.todo.push_back(SVGCrdtOps::EditRectangle { 
+            rectangle_id,
+            partial: edits, 
+            timestamp
+        });
+        self.execute_all_todo();
+    }
+
+    pub fn add_path(
+        &mut self, 
+        group_id: Option<String>, 
+        partial_path: PartialSVGPath
+    ) {
+        let timestamp = epoch_now_nanos();
+        let path_id = gen_str_id();
+        self.todo.push_back(SVGCrdtOps::AddPath { 
+            path_id, 
+            group_id, 
+            partial: partial_path, 
+            timestamp 
+        });
+        self.execute_all_todo();
+    }
+
+    pub fn edit_path(
+        &mut self, 
+        path_id: String, 
+        partial_path: PartialSVGPath
+    ) {
+        let timestamp = epoch_now_nanos();
+        self.todo.push_back(SVGCrdtOps::EditPath { 
+            path_id, 
+            partial: partial_path, 
+            timestamp 
+        });
+        self.execute_all_todo();
+    }
+
+    pub fn edit_path_point_type(
+        &mut self, 
+        path_id: String, 
+        point_id: String,
+        command_type: SVGPathCommandType, 
+    ) {
+        let timestamp = epoch_now_nanos();
+        self.todo.push_back(SVGCrdtOps::EditPathPointType {
+            path_id, 
+            point_id, 
+            command_type, 
+            timestamp
+        });
+        self.execute_all_todo();
+
+    }
+
+    pub fn edit_path_point_pos(
+        &mut self, 
+        path_id: String, 
+        point_id: String, 
+        new_pos: Vec2
+    ) {
+        let timestamp = epoch_now_nanos();
+        self.todo.push_back(SVGCrdtOps::EditPathPointPos { 
+            path_id, 
+            point_id, 
+            new_pos, 
+            timestamp
+        });
+        self.execute_all_todo();
+    }
+
+    pub fn edit_path_point_handle1(
+        &mut self, 
+        path_id: String, 
+        point_id: String, 
+        new_handle1: Vec2
+    ) {
+        let timestamp = epoch_now_nanos();
+        self.todo.push_back(SVGCrdtOps::EditPathPointHandle1 { 
+            path_id, 
+            point_id, 
+            new_handle1, 
+            timestamp
+        });
+        self.execute_all_todo();
+    }
+
+    pub fn edit_path_point_handle2(
+        &mut self, 
+        path_id: String, 
+        point_id: String, 
+        new_handle2: Vec2
+    ) {
+        let timestamp = epoch_now_nanos();
+        self.todo.push_back(SVGCrdtOps::EditPathPointHandle2 { 
+            path_id, 
+            point_id, 
+            new_handle2, 
+            timestamp
+        });
+        self.execute_all_todo();
+    }
+
+    pub fn add_point_to_path(
+        &mut self, 
+        path_id: String, 
+        command: SVGPathCommandType, 
+        pos: Vec2
+    ) {
+        let timestamp = epoch_now_nanos();
+        let point_id = gen_str_id();
+        self.todo.push_back(SVGCrdtOps::AddPointToPath { 
+            path_id, 
+            point_id,
+            command, 
+            pos, 
+            timestamp
+        });
+        self.execute_all_todo();
+    }
+
+    pub fn move_object_to_group(
+        &mut self, 
+        object_id: String, 
+        group_id: String, 
+        index: usize
+    ) {
+        let timestamp = epoch_now_nanos();
+        self.todo.push_back(SVGCrdtOps::MoveObjectToGroup { 
+            object_id, 
+            group_id: Some(group_id), 
+            index,
+            timestamp
+        });
+        self.execute_all_todo();
+    }
+
+    pub fn move_object_to_root(&mut self, object_id: String, index: usize) {
+        let timestamp = epoch_now_nanos();
+        self.todo.push_back(SVGCrdtOps::MoveObjectToGroup { 
+            object_id, 
+            group_id: None, 
+            timestamp, 
+            index
+        });
+        self.execute_all_todo();
+    }
+
+    pub fn remove_object(&mut self, object_id: String) {
+        let timestamp = epoch_now_nanos();
+        self.todo.push_back(SVGCrdtOps::RemoveObject { 
+            object_id, 
+            timestamp
+        });
+        self.execute_all_todo();
+    }
+
+    pub fn remove_path_point(
+        &mut self, 
+        path_id: String, 
+        point_id: String
+    ) {
+        let timestamp = epoch_now_nanos();
+        self.todo.push_back(SVGCrdtOps::RemovePathPoint { 
+            path_id, 
+            point_id,
+            timestamp 
+        });
+        self.execute_all_todo();
+    }
+
+    pub fn save_oplog(&self) -> Option<String> {
+        serde_json::to_string(&self.history).ok()
+    }
+
+    pub fn merge(&mut self, oplog: Vec<SVGCrdtOps>) {
+        let mut i1 = 0;
+        let mut i2 = 0;
+        let n1 = self.history.len();
+        let n2 = oplog.len();
+        while i1 < n1 && i2 < n2 {
+            if self.history[i1].get_timestamp() <= oplog[i2].get_timestamp() {
+                self.todo.push_back(self.history[i1].clone());
+                i1 += 1;
+            } else {
+                self.todo.push_back(oplog[i2].clone());
+                i2 += 1;
+            }
+        }
+        while i1 < n1 {
+            self.todo.push_back(self.history[i1].clone());
+            i1 += 1;
+        }
+        while i2 < n2 {
+            self.todo.push_back(oplog[i2].clone());
+            i2 += 1;
+        }
+        self.history = vec![];
+        self.execute_all_todo();
     }
 
     pub fn children(&self) -> SVGDocTree {

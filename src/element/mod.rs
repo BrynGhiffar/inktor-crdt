@@ -32,19 +32,15 @@ impl SVGObject {
 #[derive(Serialize, Deserialize, Tsify, Clone)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct SVGDocTree {
-    pub(crate) children: Vec<SVGObject>
+    pub children: Vec<SVGObject>
 }
 
 
 impl SVGDocTree {
 
-    // fn find_object_mut<'a>(&'a mut self) -> Option<&mut SVGObject> {
-    //     None
-    // }
-
-    // fn find_object_mut_aux<'a>(group: &'a mut SVGGroup, object_id: &'a str) -> Option<&'a mut SVGObject> {
-    //     None
-    // }
+    pub (crate) fn new() -> Self {
+        Self { children: Vec::new() }
+    }
 
     pub(crate) fn find_group_has_object_id<'a>(
         &'a mut self, 

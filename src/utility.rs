@@ -1,5 +1,23 @@
 use crate::prelude::*;
 
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    pub(crate) fn log(s: &str);
+}
+
+#[cfg(feature = "debug")]
+#[macro_export]
+macro_rules! console_log {
+    ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
+}
+
+#[cfg(not(feature = "debug"))]
+#[macro_export]
+macro_rules! console_log {
+    ($($t:tt)*) => {}
+}
+
 pub fn gen_str_id() -> String {
     return StringGenerator::default().next_id();
 }
@@ -33,7 +51,7 @@ impl Color {
 
 pub type UnixEpochTimeNanos = u128;
 
-pub fn epoch_now_millis() -> UnixEpochTimeNanos {
+pub fn epoch_now_nanos() -> UnixEpochTimeNanos {
     let start = SystemTime::now();
     let duration = start
         .duration_since(UNIX_EPOCH)

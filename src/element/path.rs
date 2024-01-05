@@ -34,7 +34,7 @@ impl SVGPathCommand {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 #[wasm_bindgen]
 pub enum SVGPathCommandType {
     START = 0,
