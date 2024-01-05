@@ -1,6 +1,6 @@
 {
   "name": "@brynghiffar/vect-crdt",
-  "version": "0.0.0-alpha5",
+  "version": "0.0.0-alpha6",
   "description": "A CRDT library for editting svg documents.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -23,6 +23,6 @@
   },
   "homepage": "https://github.com/BrynGhiffar/vect-crdt-rs#readme",
   "dependencies": {
-    "@brynghiffar/vect-crdt-rs": "^0.0.0-alpha3"
+    "@brynghiffar/vect-crdt-rs": "0.0.0-alpha4"
   }
 }
