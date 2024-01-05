@@ -1,0 +1,28 @@
+{
+  "name": "@brynghiffar/vect-crdt",
+  "version": "0.0.0-alpha5",
+  "description": "A CRDT library for editting svg documents.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BrynGhiffar/vect-crdt-rs.git"
+  },
+  "bugs": {
+    "url": "https://github.com/BrynGhiffar/vect-crdt-rs/issues"
+  },
+  "homepage": "https://github.com/BrynGhiffar/vect-crdt-rs#readme",
+  "dependencies": {
+    "@brynghiffar/vect-crdt-rs": "^0.0.0-alpha3"
+  }
+}
