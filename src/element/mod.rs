@@ -19,7 +19,7 @@ pub enum SVGObject {
 }
 
 impl SVGObject {
-    pub(crate) fn get_id(&self) -> &str {
+    pub fn get_id(&self) -> &str {
         match self {
             Self::Circle(circle) => &circle.id,
             Self::Rectangle(rect) => &rect.id,

@@ -3,22 +3,22 @@ use crate::prelude::*;
 #[derive(Serialize, Deserialize, Tsify, Clone)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct SVGGroup {
-    pub(crate) id: String,
-    pub(crate) fill: Option<Color>,
-    pub(crate) stroke: Option<Color>,
-    pub(crate) stroke_width: Option<i32>,
-    pub(crate) children: Vec<SVGObject>
+    pub id: String,
+    pub fill: Option<Color>,
+    pub stroke: Option<Color>,
+    pub stroke_width: Option<i32>,
+    pub children: Vec<SVGObject>
 }
 
 #[derive(Serialize, Deserialize, Tsify, Clone)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct PartialSVGGroup {
     #[tsify(optional)]
-    fill: Option<Option<Color>>,
+    pub fill: Option<Option<Color>>,
     #[tsify(optional)]
-    stroke: Option<Option<Color>>,
+    pub stroke: Option<Option<Color>>,
     #[tsify(optional)]
-    stroke_width: Option<Option<i32>>,
+    pub stroke_width: Option<Option<i32>>,
 }
 
 impl partially::Partial for SVGGroup {

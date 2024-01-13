@@ -1,4 +1,5 @@
 pub use wasm_timer::{ SystemTime, UNIX_EPOCH };
+pub use std::time::Duration;
 // pub use std::time::{SystemTime, UNIX_EPOCH};
 pub use partially::Partial;
 pub use serde::Deserialize;
@@ -11,7 +12,6 @@ pub use std::collections::VecDeque;
 pub use web_sys::*;
 pub use crate::*;
 pub(crate) use crate::crdt::core::*;
-pub(crate) use crate::console_log;
 pub use crate::{
     utility::*,
     element::{ 

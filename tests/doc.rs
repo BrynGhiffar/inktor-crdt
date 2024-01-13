@@ -23,6 +23,14 @@ fn empty_rectangle() -> PartialSVGRectangle {
     }
 }
 
+fn empty_group() -> PartialSVGGroup {
+    PartialSVGGroup {
+        fill: None,
+        stroke_width: None,
+        stroke: None,
+    }
+}
+
 #[test]
 fn test_create_circle() {
     let mut doc = SVGDoc::new();
@@ -42,12 +50,11 @@ fn test_edit_circle() {
     let mut doc = SVGDoc::new();
     let circle = empty_circle();
     doc.add_circle(None, circle);
-    doc.children().children.iter_mut().for_each(|o| {
-        match o {
-            SVGObject::Circle(c) => c.set_pos(100, 50),
-            _ => ()
-        }
-    });
+    assert_eq!(doc.children().children.len(), 1);
+    let circle_id = doc.children().children[0].get_id().to_string();
+    let mut circle_edits = empty_circle();
+    circle_edits.pos = Some(Vec2 { x: 100, y: 50 });
+    doc.edit_circle(circle_id, circle_edits);
     assert!(doc.children().children.iter().all(|o| {
         match o {
             SVGObject::Circle(c) => {
@@ -109,7 +116,10 @@ fn test_edit_rectangle() {
 
     doc.add_rectangle(None, rect);
 
-    
+    let rect_id = doc.children().children[0].get_id().to_string();
+    let mut rect_edits = empty_rectangle();
+    rect_edits.opacity = Some(0.5);
+    doc.edit_rectangle(rect_id, rect_edits);
     assert!(doc.children().children.iter().all(|o| {
         match o {
             SVGObject::Rectangle(o) => {
@@ -120,4 +130,48 @@ fn test_edit_rectangle() {
         }
     }));
     assert_eq!(doc.children().children.len(), 1, "assert only rectangle exists");
+}
+
+#[test]
+fn test_move_ancestor_into_grandchild_failed() {
+    let mut doc = SVGDoc::new();
+    doc.add_group(None, empty_group());
+    let group1_id = match &doc.children().children[0] {
+        SVGObject::Group(g) => g.id.clone(),
+        _ => panic!("First should be group")
+    };
+    doc.add_group(Some(group1_id.clone()), empty_group());
+    let group2_id = match &doc.get_group(group1_id.clone()) {
+        Some(g) => {
+            match &g.children[0] {
+                SVGObject::Group(g) => g.id.clone(),
+                _ => panic!("Child group should exist")
+            }
+        },
+        _ => panic!("Group should exist")
+    };
+    assert_eq!(doc.children().children.len(), 1);
+
+    // Operation must fail. With nothing changed in the tree.
+    doc.move_object_to_group(group1_id.clone(), group2_id.clone(), 0);
+
+    assert_eq!(doc.children().children.len(), 1);
+
+    let exp_group1_id = match &doc.children().children[0] {
+        SVGObject::Group(g) => g.id.clone(),
+        _ => panic!("First should be group")
+    };
+
+    let exp_group2_id = match &doc.get_group(group1_id.clone()) {
+        Some(g) => {
+            match &g.children[0] {
+                SVGObject::Group(g) => g.id.clone(),
+                _ => panic!("Child group should exist")
+            }
+        },
+        _ => panic!("Group should exist")
+    };
+
+    assert_eq!(group1_id, exp_group1_id);
+    assert_eq!(group2_id, exp_group2_id);
 }

@@ -9,7 +9,7 @@ extern "C" {
 #[cfg(feature = "debug")]
 #[macro_export]
 macro_rules! console_log {
-    ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
+    ($($t:tt)*) => (log(&format!("[RUST_WASM_DEBUG]: {}", &format_args!($($t)*).to_string())))
 }
 
 #[cfg(not(feature = "debug"))]
@@ -52,9 +52,13 @@ impl Color {
 pub type UnixEpochTimeNanos = u128;
 
 pub fn epoch_now_nanos() -> UnixEpochTimeNanos {
+    epoch_now().as_nanos()
+}
+
+pub fn epoch_now() -> Duration {
     let start = SystemTime::now();
     let duration = start
         .duration_since(UNIX_EPOCH)
         .unwrap();
-    duration.as_nanos()
+    duration
 }

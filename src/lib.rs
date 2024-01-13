@@ -143,7 +143,6 @@ impl SVGDoc {
     }
 
     pub fn children(&self) -> SVGDocTree {
-        console_log!("Get Children");
         self.tree.children()
     }
 

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::prelude::*;
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -94,14 +96,29 @@ impl SVGCrdtOps {
     pub(crate) fn get_timestamp(&self) -> UnixEpochTimeNanos {
         match *self {
             Self::AddGroup { timestamp, .. } => timestamp,
-            _ => todo!()
+            Self::AddCircle { timestamp, .. } => timestamp,
+            Self::AddPath { timestamp, .. } => timestamp,
+            Self::AddPointToPath { timestamp, .. } => timestamp,
+            Self::AddRectangle { timestamp, .. } => timestamp, 
+            Self::EditCircle { timestamp, .. } => timestamp,
+            Self::EditPath { timestamp, .. } => timestamp,
+            Self::EditPathPointHandle1 { timestamp, .. } => timestamp,
+            Self::EditPathPointHandle2 { timestamp, .. } => timestamp,
+            Self::EditPathPointPos { timestamp, .. } => timestamp,
+            Self::EditPathPointType { timestamp, .. } => timestamp,
+            Self::EditRectangle { timestamp, .. } => timestamp,
+            Self::MoveObjectToGroup { timestamp, .. } => timestamp,
+            Self::RemoveObject { timestamp, .. } => timestamp,
+            Self::RemovePathPoint { timestamp, .. } => timestamp,
         }
     }
 }
 
 pub(crate) struct SVGDocCrdt {
+    // todo is an ordered array ofsvg crdt operations
     todo: VecDeque<SVGCrdtOps>,
     history: Vec<SVGCrdtOps>,
+    parent: HashMap<String, Option<String>>,
     // last_timestamp: UnixEpochTimeNanos, // the time of the last executed operation
     tree: SVGDocTree
 }
@@ -161,6 +178,14 @@ impl SVGDocCrdt {
         }
     }
 
+    fn is_ancestor(&self, object1_id: String, object2_id: String) -> bool{
+        // Is object1 an ancestor of object2
+        let Some(Some(parent)) = self.parent.get(&object2_id) else { return false; };
+        let parent = parent.clone();
+        if &parent == &object1_id { return true; }
+        return self.is_ancestor(object1_id, parent);
+    }
+
     fn execute_all_todo(&mut self) {
         while let Some(op) = self.todo.pop_front() {
             self.do_mut_op(op.clone());
@@ -179,9 +204,12 @@ impl SVGDocCrdt {
         partial_group: PartialSVGGroup
     ) {
         let mut new_group = SVGGroup::default();
-        new_group.id = new_group_id;
+        new_group.id = new_group_id.clone();
         new_group.apply_some(partial_group);
+        *self.parent.entry(new_group_id.clone()).or_insert(group_id.clone()) = group_id.clone();
         if let Some(group_id) = group_id {
+            if new_group_id == group_id { return }
+            if self.is_ancestor(new_group_id.clone(), group_id.clone()) { return; }
             let Some(group) = self.tree.find_group_mut(&group_id) else { return; };
             group.children.push(SVGObject::Group(new_group));
             return;
@@ -196,9 +224,12 @@ impl SVGDocCrdt {
         partial_circle: PartialSVGCircle
     ) {
         let mut circle = SVGCircle::default();
-        circle.id = circle_id;
+        circle.id = circle_id.clone();
         circle.apply_some(partial_circle);
+        *self.parent.entry(circle_id.clone()).or_insert(group_id.clone()) = group_id.clone();
         if let Some(group_id) = group_id {
+            if circle_id == group_id { return }
+            if self.is_ancestor(circle_id.clone(), group_id.clone()) { return; }
             let Some(group) = self.tree.find_group_mut(&group_id) else { return; };
             group.children.push(SVGObject::Circle(circle));
             return;
@@ -213,9 +244,12 @@ impl SVGDocCrdt {
         partial_rectangle: PartialSVGRectangle
     ) {
         let mut rectangle = SVGRectangle::default();
-        rectangle.id = rectangle_id;
+        rectangle.id = rectangle_id.clone();
         rectangle.apply_some(partial_rectangle);
+        *self.parent.entry(rectangle_id.clone()).or_insert(group_id.clone()) = group_id.clone();
         if let Some(group_id) = group_id {
+            if rectangle_id == group_id { return }
+            if self.is_ancestor(rectangle_id.clone(), group_id.clone()) { return; }
             let Some(group) = self.tree.find_group_mut(&group_id) else { return; };
             group.children.push(SVGObject::Rectangle(rectangle));
             return;
@@ -230,9 +264,12 @@ impl SVGDocCrdt {
         partial_path: PartialSVGPath
     ) {
         let mut path = SVGPath::default();
-        path.id = path_id;
+        path.id = path_id.clone();
         path.apply_some(partial_path);
+        *self.parent.entry(path_id.clone()).or_insert(group_id.clone()) = group_id.clone();
         if let Some(group_id) = group_id {
+            if path_id == group_id { return }
+            if self.is_ancestor(path_id.clone(), group_id.clone()) { return; }
             let Some(group) = self.tree.find_group_mut(&group_id) else { return; };
             group.children.push(SVGObject::Path(path));
             return;
@@ -409,10 +446,16 @@ impl SVGDocCrdt {
         group_id: String, 
         index: usize
     ) {
+        // TODO: This will fail if you are putting an object inside itself. i.e. object_id == group_id
+        // TODO: This will fail if object_id is an ancestor of group_id. That is when object_id is also a group.
+        // TODO: Need to add check for whether object_id is ancestor of group_id
+        if object_id == group_id { return }
+        if self.is_ancestor(object_id.clone(), group_id.clone()) { return; }
         let rootIndex = self.tree.children.iter().position(|o: &SVGObject| o.get_id().eq(&object_id));
         if let Some(old_index) = rootIndex {
             let object = self.tree.children.remove(old_index);
             let Some(new_group) = self.tree.find_group_mut(&group_id) else { return; };
+            *self.parent.entry(object_id.clone()).or_insert(Some(group_id.clone())) = Some(group_id.clone());
             if index < new_group.children.len() {
                 new_group.children.insert(index, object);
             } else {
@@ -426,6 +469,7 @@ impl SVGDocCrdt {
             let Some(old_index) = groupIndex else { return; };
             let object = group.children.remove(old_index);
             let Some(new_group) = self.tree.find_group_mut(&group_id) else { return; };
+            *self.parent.entry(object_id.clone()).or_insert(Some(group_id.clone())) = Some(group_id.clone());
             if index < new_group.children.len() {
                 new_group.children.insert(index, object);
             } else {
@@ -440,9 +484,11 @@ impl SVGDocCrdt {
         object_id: String,
         index: usize
     ) {
+        // Check is ancestor is not required, since no element is ancestor to the root element.
         let rootIndex = self.tree.children.iter().position(|o: &SVGObject| o.get_id().eq(&object_id));
         if let Some(old_index) = rootIndex {
             let object = self.tree.children.remove(old_index);
+            *self.parent.entry(object_id.clone()).or_insert(None) = None;
             if index < self.tree.children.len() {
                 self.tree.children.insert(index, object);
             } else {
@@ -455,6 +501,7 @@ impl SVGDocCrdt {
             let groupIndex = group.children.iter().position(|o| o.get_id().eq(&object_id));
             let Some(old_index) = groupIndex else { return; };
             let object = group.children.remove(old_index);
+            *self.parent.entry(object_id.clone()).or_insert(None) = None;
             if index < self.tree.children.len() {
                 self.tree.children.insert(index, object);
             } else {
@@ -484,6 +531,7 @@ impl SVGDocCrdt {
         let index = self.tree.children
             .iter()
             .position(|o| o.get_id().eq(&object_id));
+        self.parent.remove(&object_id);
         if let Some(index) = index {
             self.tree.children.remove(index);
             return;
@@ -503,6 +551,7 @@ impl SVGDocCrdt {
         return Self { 
             tree: SVGDocTree::new(),
             todo: VecDeque::new(),
+            parent: HashMap::new(),
             history: Vec::new(),
         };
     }
@@ -773,16 +822,26 @@ impl SVGDocCrdt {
     }
 
     pub fn merge(&mut self, oplog: Vec<SVGCrdtOps>) {
+
+        #[cfg(feature = "debug")]
+        let start_at = epoch_now().as_millis();
+
         let mut i1 = 0;
         let mut i2 = 0;
         let n1 = self.history.len();
         let n2 = oplog.len();
         while i1 < n1 && i2 < n2 {
-            if self.history[i1].get_timestamp() <= oplog[i2].get_timestamp() {
+            let t1 = self.history[i1].get_timestamp();
+            let t2 = oplog[i2].get_timestamp();
+            if t1 < t2 {
                 self.todo.push_back(self.history[i1].clone());
                 i1 += 1;
-            } else {
+            } else if t2 < t1 {
                 self.todo.push_back(oplog[i2].clone());
+                i2 += 1;
+            } else if t1 == t2 {
+                self.todo.push_back(self.history[i1].clone());
+                i1 += 1;
                 i2 += 1;
             }
         }
@@ -794,8 +853,25 @@ impl SVGDocCrdt {
             self.todo.push_back(oplog[i2].clone());
             i2 += 1;
         }
-        self.history = vec![];
+
+        #[cfg(feature = "debug")]
+        {
+            let end_at = epoch_now().as_millis();
+            let merge_duration = end_at - start_at;
+            console_log!("{} operations was merged", n1 + n2);
+            console_log!("Merge took: {}ms", merge_duration);
+            console_log!("Merging started at: {}ms", start_at);
+            console_log!("Merging ended at: {}ms", end_at);
+        }
+
+        self.clear_tree();
         self.execute_all_todo();
+    }
+    
+    pub fn clear_tree(&mut self) {
+        self.history = vec![];
+        self.tree = SVGDocTree::new();
+        self.parent = HashMap::new();
     }
 
     pub fn children(&self) -> SVGDocTree {
