@@ -50,6 +50,7 @@ impl Color {
 
 
 pub type UnixEpochTimeNanos = u128;
+pub type ReplicaId = String;
 
 pub fn epoch_now_nanos() -> UnixEpochTimeNanos {
     epoch_now().as_nanos()
@@ -62,3 +63,5 @@ pub fn epoch_now() -> Duration {
         .unwrap();
     duration
 }
+pub trait HashableItem: PartialEq + Eq + Hash + Clone { }
+impl<T> HashableItem for T where T: PartialEq + Eq + Hash + Clone { }
