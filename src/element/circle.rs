@@ -1,10 +1,10 @@
 use crate::prelude::*;
 
 
-#[derive(Serialize, Deserialize, Tsify, Clone)]
+#[derive(Serialize, Deserialize, Tsify, Clone, Debug)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct SVGCircle {
-    pub id: String,
+    pub id: NodeID,
     pub pos: Vec2,
     pub radius: i32,
     pub fill: Color,

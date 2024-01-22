@@ -22,14 +22,14 @@ pub fn gen_str_id() -> String {
     return StringGenerator::default().next_id();
 }
 
-#[derive(Tsify, Serialize, Deserialize, Clone)]
+#[derive(Tsify, Serialize, Deserialize, Clone, Debug)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct Vec2 {
     pub x: i32,
     pub y: i32,
 }
 
-#[derive(Serialize, Deserialize, Tsify, Clone)]
+#[derive(Serialize, Deserialize, Tsify, Clone, Debug)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct Color(
     pub i32 /* red (0 - 255) */, 
@@ -51,6 +51,7 @@ impl Color {
 
 pub type UnixEpochTimeNanos = u128;
 pub type ReplicaId = String;
+pub type NodeID = String;
 
 pub fn epoch_now_nanos() -> UnixEpochTimeNanos {
     epoch_now().as_nanos()

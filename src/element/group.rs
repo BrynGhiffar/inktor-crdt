@@ -1,9 +1,9 @@
 use crate::prelude::*;
 
-#[derive(Serialize, Deserialize, Tsify, Clone)]
+#[derive(Serialize, Deserialize, Tsify, Clone, Debug)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct SVGGroup {
-    pub id: String,
+    pub id: NodeID,
     pub fill: Option<Color>,
     pub stroke: Option<Color>,
     pub stroke_width: Option<i32>,
@@ -36,6 +36,16 @@ impl partially::Partial for SVGGroup {
             self.stroke_width = stroke_width.into();
         }
         will_apply_some
+    }
+}
+
+impl PartialSVGGroup {
+    pub fn empty() -> Self {
+        PartialSVGGroup {
+            fill: None,
+            stroke: None,
+            stroke_width: None
+        }
     }
 }
 

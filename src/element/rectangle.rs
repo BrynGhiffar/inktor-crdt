@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[derive(Serialize, Deserialize, Tsify, Clone)]
+#[derive(Serialize, Deserialize, Tsify, Clone, Debug)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct SVGRectangle {
     pub id: String,

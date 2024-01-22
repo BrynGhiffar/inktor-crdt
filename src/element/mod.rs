@@ -4,7 +4,7 @@ pub mod path;
 pub mod rectangle;
 use crate::prelude::*;
 
-#[derive(Serialize, Deserialize, Tsify, Clone)]
+#[derive(Serialize, Deserialize, Tsify, Clone, Debug)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(tag = "type")]
 pub enum SVGObject {
@@ -29,7 +29,7 @@ impl SVGObject {
     }
 }
 
-#[derive(Serialize, Deserialize, Tsify, Clone)]
+#[derive(Serialize, Deserialize, Tsify, Clone, Debug)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct SVGDocTree {
     pub children: Vec<SVGObject>

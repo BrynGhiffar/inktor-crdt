@@ -4,13 +4,13 @@ import { SVGDoc } from "@brynghiffar/vect-crdt-rs";
 import { DroppableSVG } from "../types";
 
 export const useSVGDoc = (docId: string) => {
-  const SVGDocRef = useRef(SVGDoc.new());
+  const SVGDocRef = useRef(SVGDoc.new(docId));
   const [droppableSVG, setDroppableSVG] = useState<DroppableSVG[]>([]);
   const fetchSVGDoc = useCallback((initial?: boolean) => {
     const doc = SVGDocRef.current;
     if (initial) {
       const data = getSVGData(docId);
-      if (data) doc.merge(data);
+      if (data) doc.load(data);
     } else {
       const data = doc.save();
       if (data) saveSVGData(docId, data);

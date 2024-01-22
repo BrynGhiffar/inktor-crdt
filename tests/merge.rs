@@ -2,10 +2,10 @@ use vect_crdt_rs::prelude::*;
 
 #[test]
 fn test_merge() {
-    let mut doc1 = SVGDoc::new();
+    let mut doc1 = SVGDoc::new("1".to_string());
     doc1.add_circle(None, PartialSVGCircle::empty());
     let Some(merge_str) = doc1.save() else { return; };
-    let mut doc2 = SVGDoc::new();
+    let mut doc2 = SVGDoc::new("2".to_string());
     doc2.merge(merge_str);
     let children1 =  doc1.children();
     let children2 = doc2.children();

@@ -33,7 +33,7 @@ fn empty_group() -> PartialSVGGroup {
 
 #[test]
 fn test_create_circle() {
-    let mut doc = SVGDoc::new();
+    let mut doc = SVGDoc::new("1".to_string());
     let circle = empty_circle();
     doc.add_circle(None, circle);
     assert!(doc.children().children.iter().all(|o| {
@@ -47,7 +47,7 @@ fn test_create_circle() {
 
 #[test]
 fn test_edit_circle() {
-    let mut doc = SVGDoc::new();
+    let mut doc = SVGDoc::new("1".to_string());
     let circle = empty_circle();
     doc.add_circle(None, circle);
     assert_eq!(doc.children().children.len(), 1);
@@ -74,7 +74,7 @@ fn test_edit_circle() {
 
 #[test]
 fn test_remove_circle() {
-    let mut doc = SVGDoc::new();
+    let mut doc = SVGDoc::new("1".to_string());
     let circle = empty_circle();
     doc.add_circle(None, circle);
     assert!(doc.children().children.iter().all(|o| {
@@ -96,7 +96,7 @@ fn test_remove_circle() {
 
 #[test]
 fn test_create_rectangle() {
-    let mut doc = SVGDoc::new();
+    let mut doc = SVGDoc::new("1".to_string());
     let rect = empty_rectangle();
 
     doc.add_rectangle(None, rect);
@@ -111,7 +111,7 @@ fn test_create_rectangle() {
 
 #[test]
 fn test_edit_rectangle() {
-    let mut doc = SVGDoc::new();
+    let mut doc = SVGDoc::new("1".to_string());
     let rect = empty_rectangle();
 
     doc.add_rectangle(None, rect);
@@ -134,17 +134,18 @@ fn test_edit_rectangle() {
 
 #[test]
 fn test_move_ancestor_into_grandchild_failed() {
-    let mut doc = SVGDoc::new();
+    let mut doc = SVGDoc::new("1".to_string());
     doc.add_group(None, empty_group());
     let group1_id = match &doc.children().children[0] {
         SVGObject::Group(g) => g.id.clone(),
         _ => panic!("First should be group")
     };
     doc.add_group(Some(group1_id.clone()), empty_group());
-    let group2_id = match &doc.get_group(group1_id.clone()) {
-        Some(g) => {
-            match &g.children[0] {
-                SVGObject::Group(g) => g.id.clone(),
+    let children = doc.children();
+    let group2_id = match children.children.get(0) {
+        Some(SVGObject::Group(g)) => {
+            match &g.children.get(0) {
+                Some(SVGObject::Group(g)) => g.id.clone(),
                 _ => panic!("Child group should exist")
             }
         },
@@ -161,11 +162,11 @@ fn test_move_ancestor_into_grandchild_failed() {
         SVGObject::Group(g) => g.id.clone(),
         _ => panic!("First should be group")
     };
-
-    let exp_group2_id = match &doc.get_group(group1_id.clone()) {
-        Some(g) => {
-            match &g.children[0] {
-                SVGObject::Group(g) => g.id.clone(),
+    let children = doc.children();
+    let exp_group2_id = match children.children.get(0) {
+        Some(SVGObject::Group(g)) => {
+            match &g.children.get(0) {
+                Some(SVGObject::Group(g)) => g.id.clone(),
                 _ => panic!("Child group should exist")
             }
         },

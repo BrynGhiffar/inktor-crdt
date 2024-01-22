@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[derive(Serialize, Deserialize, Tsify, Clone)]
+#[derive(Serialize, Deserialize, Tsify, Clone, Debug)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(tag = "type")]
 pub enum SVGPathCommand {
@@ -47,10 +47,10 @@ pub enum SVGPathCommandType {
 }
 
 
-#[derive(Serialize, Deserialize, Tsify, Clone)]
+#[derive(Serialize, Deserialize, Tsify, Clone, Debug)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct SVGPath {
-    pub(crate) id: String,
+    pub(crate) id: NodeID,
     pub(crate) fill: Color,
     pub(crate) stroke_width: i32,
     pub(crate) stroke: Color,

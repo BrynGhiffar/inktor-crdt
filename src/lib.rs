@@ -8,14 +8,14 @@ use prelude::*;
 
 #[wasm_bindgen]
 pub struct SVGDoc {
-    tree: SVGDocCrdt,
+    tree: SVGDocCrdt2,
 }
 
 
 #[wasm_bindgen]
 impl SVGDoc {
-    pub fn new() -> Self {
-        return SVGDoc { tree: SVGDocCrdt::new() };
+    pub fn new(replica_id: ReplicaId) -> Self {
+        return SVGDoc { tree: SVGDocCrdt2::new(replica_id) };
     }
 
     pub fn get_group(&self, group_id: String) -> Option<SVGGroup> {
@@ -113,11 +113,13 @@ impl SVGDoc {
         group_id: String, 
         index: usize
     ) {
-        self.tree.move_object_to_group(object_id, group_id, index)
+        // self.tree.move_object_to_group(object_id, group_id, index)
+        self.tree.move_object(Some(group_id), object_id, Some(index))
     }
 
     pub fn move_object_to_root(&mut self, object_id: String, index: usize) {
-        self.tree.move_object_to_root(object_id, index)
+        // self.tree.move_object_to_root(object_id, index)
+        self.tree.move_object(None, object_id, Some(index))
     }
 
     pub fn remove_object(&mut self, object_id: String) {
@@ -133,20 +135,27 @@ impl SVGDoc {
     }
 
     pub fn save(&self) -> Option<String> {
-        self.tree.save_oplog()
+        Some(self.tree.save())
+    }
+
+    pub fn load(&mut self, data: String) {
+        self.tree.load(data)
+    }
+
+    pub fn broadcast(&mut self) -> String {
+        self.tree.broadcast()
     }
 
     pub fn merge(&mut self, oplog: String) {
-        let oplog = serde_json::from_str::<Vec<SVGCrdtOps>>(&oplog).ok();
-        let Some(oplog) = oplog else { return; };
         self.tree.merge(oplog);
     }
 
     pub fn children(&self) -> SVGDocTree {
-        self.tree.children()
+        self.tree.tree()
     }
 
     pub fn repr(&self) -> String {
-        self.tree.repr()
+        "NO_REPR".to_string()
+        // self.tree.repr()
     }
 }

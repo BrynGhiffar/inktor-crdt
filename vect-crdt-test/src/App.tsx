@@ -10,8 +10,8 @@ function App() {
   const doc2 = useSVGDoc("t1");
 
   const onClickMerge = useCallback(() => {
-    const h2 = doc2.SVGDocRef.current.save();
-    const h1 = doc1.SVGDocRef.current.save();
+    const h2 = doc2.SVGDocRef.current.broadcast();
+    const h1 = doc1.SVGDocRef.current.broadcast();
     if (!h2) return;
     if (!h1) return;
     doc1.SVGDocRef.current.merge(h2);

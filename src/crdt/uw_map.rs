@@ -84,6 +84,34 @@ impl<K, V> UWMap<K, V> where K: UWMapKey, V: UWMapItem {
         }
     }
 
+    pub fn inc_vtime(
+        &mut self,
+        replica_id: ReplicaId,
+        key: K
+    ) {
+        let update_vtime = self.updated.remove(&key);
+        let remove_vtime = self.removed.remove(&key);
+        let Some(value) = self.kv.remove(&key) else { return; };
+        match (update_vtime, remove_vtime) {
+            (Some(mut vtime), _) => {
+                vtime.inc(replica_id);
+                self.updated.insert(key.clone(), vtime);
+                self.kv.insert(key, value);
+            },
+            (_, Some(mut vtime)) => {
+                vtime.inc(replica_id);
+                self.updated.insert(key.clone(), vtime);
+                self.kv.insert(key, value);
+            },
+            (_, _) => {
+                let mut vtime = VTime::zero();
+                vtime.inc(replica_id);
+                self.updated.insert(key.clone(), vtime);
+                self.kv.insert(key, value);
+            }
+        }
+    }
+
     pub fn remove(
         &mut self,
         replica_id: ReplicaId,
