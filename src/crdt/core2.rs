@@ -374,7 +374,7 @@ impl SVGDocCrdt2 {
         new_group_id: Option<NodeID>,
         object_id: NodeID,
         index: Option<usize>
-    ) {
+    ) -> usize {
         match self.ordering.entry(old_group_id) {
             Entry::Occupied(mut o) => {
                 let index = o.get().iter().position(|o| o == &object_id);
@@ -392,16 +392,20 @@ impl SVGDocCrdt2 {
                 let vecc = o.get_mut();
                 if let Some(index) = index {
                     vecc.insert(index, object_id.clone());
+                    return index;
                 } else {
                     vecc.push(object_id.clone());
+                    return vecc.len();
                 }
             },
             Entry::Vacant(v) => {
                 let mut vecc = Vec::new();
                 vecc.push(object_id.clone());
+                let length = vecc.len();
                 v.insert(vecc);
+                return length;
             }
-        };
+        }
     }
     pub fn move_object(&mut self, group_id: Option<NodeID>, object_id: String, index: Option<usize>) {
         let now = epoch_now_nanos();
@@ -411,43 +415,7 @@ impl SVGDocCrdt2 {
         if let Some(group_id) = group_id {
             if self.is_ancestor(&object_id, &group_id) { return; }
 
-            // This is incorrect, we need to keep track of how many children, each group node contains.
-            let child_count = self.parent.iter()
-                .map(|(_, (g, _, _))| {
-                    if let Some(g) = g {
-                        if g == &group_id {
-                            return 1;
-                        }
-                    }
-                    return 0;
-                }).sum();
-            let index = index.unwrap_or(child_count);
-            
-            // remove from old group id.
-            match self.ordering.entry(old_group_id.clone()) {
-                Entry::Occupied(mut o) => {
-                    let index = o.get().iter().position(|o| o == &object_id);
-                    if let Some(index) = index {
-                        o.get_mut().remove(index);
-                    }
-                },
-                Entry::Vacant(v) => {
-                    v.insert(Vec::new());
-                }
-            };
-
-            match self.ordering.entry(Some(group_id.clone())) {
-                Entry::Occupied(mut o) => {
-                    let vecc = o.get_mut();
-                    vecc.insert(index, object_id.clone())
-                },
-                Entry::Vacant(v) => {
-                    let mut vecc = Vec::new();
-                    vecc.push(object_id.clone());
-                    v.insert(vecc);
-                }
-            };
-
+            let index = self.update_ordering(old_group_id.clone(), Some(group_id.clone()), object_id.clone(), index);
             self.parent.insert(object_id.clone(), (Some(group_id.clone()), index, now));
             self.node_map.inc_vtime(self.replica_id.clone(), object_id.clone());
             let move_log = MoveLog { new_group_id: Some(group_id), old_group_id, index, object_id, timestamp: now };
@@ -455,39 +423,7 @@ impl SVGDocCrdt2 {
             self.move_history.push(move_log);
             return;
         }
-        let repl_index = self.parent.iter()
-            .map(|(_, (g,_,_))| {
-                if g.is_none() { return 1; }
-                else { return 0; }
-            })
-            .sum();
-        let index = index.unwrap_or(repl_index);
-
-        // remove from old group id.
-        match self.ordering.entry(old_group_id.clone()) {
-            Entry::Occupied(mut o) => {
-                let index = o.get().iter().position(|o| o == &object_id);
-                if let Some(index) = index {
-                    o.get_mut().remove(index);
-                }
-            },
-            Entry::Vacant(v) => {
-                v.insert(Vec::new());
-            }
-        };
-        // add into root group id;
-        match self.ordering.entry(None) {
-            Entry::Occupied(mut o) => {
-                let vecc = o.get_mut();
-                vecc.insert(index, object_id.clone())
-            },
-            Entry::Vacant(v) => {
-                let mut vecc = Vec::new();
-                vecc.push(object_id.clone());
-                v.insert(vecc);
-            }
-        }
-
+        let index = self.update_ordering(old_group_id.clone(), None, object_id.clone(), index);
         self.parent.insert(object_id.clone(), (None, index, now));
         self.node_map.inc_vtime(self.replica_id.clone(), object_id.clone());
         let move_log = MoveLog { new_group_id: None, old_group_id, index, object_id, timestamp: now };
@@ -499,56 +435,12 @@ impl SVGDocCrdt2 {
         if let Some(new_group_id) = new_group_id.clone() {
             if self.is_ancestor(&object_id, &new_group_id) { return; }
         }
-        match self.ordering.entry(old_group_id.clone()) {
-            Entry::Occupied(mut o) => {
-                let index = o.get().iter().position(|o| o == &object_id);
-                if let Some(index) = index {
-                    o.get_mut().remove(index);
-                }
-            },
-            Entry::Vacant(v) => {
-                v.insert(Vec::new());
-            }
-        };
-        // add into root group id;
-        match self.ordering.entry(new_group_id.clone()) {
-            Entry::Occupied(mut o) => {
-                let vecc = o.get_mut();
-                vecc.insert(index, object_id.clone())
-            },
-            Entry::Vacant(v) => {
-                let mut vecc = Vec::new();
-                vecc.push(object_id.clone());
-                v.insert(vecc);
-            }
-        }
+        self.update_ordering(old_group_id, new_group_id.clone(), object_id.clone(), Some(index));
         self.parent.insert(object_id, (new_group_id, index, timestamp));
     }
 
     fn undo_move(&mut self, MoveLog { old_group_id, object_id, new_group_id, .. }: MoveLog) {
-        match self.ordering.entry(new_group_id) {
-            Entry::Occupied(mut o) => {
-                let index = o.get().iter().position(|o| o == &object_id);
-                if let Some(index) = index {
-                    o.get_mut().remove(index);
-                }
-            },
-            Entry::Vacant(v) => {
-                v.insert(Vec::new());
-            }
-        };
-        // add into root group id;
-        match self.ordering.entry(old_group_id.clone()) {
-            Entry::Occupied(mut o) => {
-                let vecc = o.get_mut();
-                vecc.push(object_id.clone());
-            },
-            Entry::Vacant(v) => {
-                let mut vecc = Vec::new();
-                vecc.push(object_id.clone());
-                v.insert(vecc);
-            }
-        }
+        self.update_ordering(new_group_id, old_group_id.clone(), object_id.clone(), None);
         self.parent.insert(object_id, (old_group_id, 0, 0));
     }
 
