@@ -7,6 +7,7 @@ pub struct SVGGroup {
     pub fill: Option<Color>,
     pub stroke: Option<Color>,
     pub stroke_width: Option<i32>,
+    pub opacity: Option<f32>,
     pub children: Vec<SVGObject>
 }
 
@@ -19,6 +20,8 @@ pub struct PartialSVGGroup {
     pub stroke: Option<Option<Color>>,
     #[tsify(optional)]
     pub stroke_width: Option<Option<i32>>,
+    #[tsify(optional)]
+    pub opacity: Option<Option<f32>>
 }
 
 impl partially::Partial for SVGGroup {
@@ -35,6 +38,9 @@ impl partially::Partial for SVGGroup {
         if let Some(stroke_width) = partial.stroke_width {
             self.stroke_width = stroke_width.into();
         }
+        if let Some(opacity) = partial.opacity {
+            self.opacity = opacity.into();
+        }
         will_apply_some
     }
 }
@@ -44,7 +50,8 @@ impl PartialSVGGroup {
         PartialSVGGroup {
             fill: None,
             stroke: None,
-            stroke_width: None
+            stroke_width: None,
+            opacity: None
         }
     }
 }
@@ -58,6 +65,7 @@ impl SVGGroup {
             fill: None, 
             stroke: None,
             stroke_width: None,
+            opacity: None,
             children: Vec::new()
         }
     }

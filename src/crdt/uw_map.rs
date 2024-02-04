@@ -1,6 +1,11 @@
 // Update Wins Map
 use crate::prelude::*;
 
+pub trait Mergeable {
+    // Merge must be commutative
+    fn merge(&self, other: &Self) -> Self;
+}
+
 pub trait UWMapKey: HashableItem {}
 pub trait UWMapItem: Clone {}
 
@@ -8,13 +13,13 @@ impl<T> UWMapKey for T where T: HashableItem {}
 impl<T> UWMapItem for T where T: Clone {}
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct UWMap<K, V> where K: UWMapKey, V: UWMapItem{
+pub struct UWMap<K, V> where K: UWMapKey, V: UWMapItem + Mergeable {
     removed: HashMap<K, VTime>,
     updated: HashMap<K, VTime>,
-    kv: HashMap<K, LWWReg<V>>
+    kv: HashMap<K, V>
 }
 
-impl<K, V> UWMap<K, V> where K: UWMapKey, V: UWMapItem {
+impl<K, V> UWMap<K, V> where K: UWMapKey, V: UWMapItem + Mergeable {
     pub fn new() -> UWMap<K, V> {
         Self {
             removed: HashMap::new(),
@@ -29,10 +34,10 @@ impl<K, V> UWMap<K, V> where K: UWMapKey, V: UWMapItem {
             if updated_vtime.partial_cmp(removed_vtime) == Some(Ordering::Less) {
                 return None;
             } else {
-                return self.kv.get(key).map(|v| v.value());
+                return self.kv.get(key);
             }
         }
-        return self.kv.get(key).map(|v| v.value());
+        return self.kv.get(key);
     }
 
     pub fn value(&self) -> HashMap<K, V> {
@@ -50,7 +55,7 @@ impl<K, V> UWMap<K, V> where K: UWMapKey, V: UWMapItem {
         keys.iter().fold(HashMap::new(), |mut prev, (key, _)| {
             let value = self.kv.get(key);
             if let Some(value) = value {
-                prev.insert(key.clone(), value.value().clone());
+                prev.insert(key.clone(), value.clone());
             }
             prev
         })
@@ -68,18 +73,18 @@ impl<K, V> UWMap<K, V> where K: UWMapKey, V: UWMapItem {
             (Some(mut vtime), _) => {
                 vtime.inc(replica_id);
                 self.updated.insert(key.clone(), vtime);
-                self.kv.insert(key, LWWReg::new(value));
+                self.kv.insert(key, value);
             },
             (_, Some(mut vtime)) => {
                 vtime.inc(replica_id);
                 self.updated.insert(key.clone(), vtime);
-                self.kv.insert(key, LWWReg::new(value));
+                self.kv.insert(key, value);
             },
             (_, _) => {
                 let mut vtime = VTime::zero();
                 vtime.inc(replica_id);
                 self.updated.insert(key.clone(), vtime);
-                self.kv.insert(key, LWWReg::new(value));
+                self.kv.insert(key, value);
             }
         }
     }
@@ -140,20 +145,30 @@ impl<K, V> UWMap<K, V> where K: UWMapKey, V: UWMapItem {
         }
     }
 
-    pub fn merge(a: &UWMap<K, V>, b: &UWMap<K, V>) -> UWMap<K, V> {
-        let Self { updated: a_updated, removed: a_removed, kv: a_kv } = a;
-        let Self { updated: b_updated, removed: b_removed, kv: b_kv } = b;
-        let mut kv = a_kv.iter().fold(b_kv.clone(), |mut acc, (ka, va)| {
-            let vb = acc.get_mut(ka);
-            if let Some(vb) = vb {
-                *vb = LWWReg::merge(va, vb);
-            } else {
-                acc.insert(ka.clone(), va.clone());
-            }
-            acc
-        });
-        let all_updated = b_updated.iter()
-            .fold(a_updated.clone(), |mut acc, (k, vb)| {
+    pub fn merge(
+        Self { 
+            updated: a_upd, 
+            removed: a_rem, 
+            kv: a_kv 
+        }: &Self, 
+        Self { 
+            updated: b_upd, 
+            removed: b_rem, 
+            kv: b_kv 
+        }: &Self
+    ) -> UWMap<K, V> {
+        let mut kv = a_kv.iter()
+            .fold(b_kv.clone(), |mut acc, (ka, va)| {
+                let vb = acc.get_mut(ka);
+                if let Some(vb) = vb {
+                    *vb = va.merge(vb);
+                } else {
+                    acc.insert(ka.clone(), va.clone());
+                }
+                acc
+            });
+        let all_updated = b_upd.iter()
+            .fold(a_upd.clone(), |mut acc, (k, vb)| {
                 if let Some(va) = acc.remove(k) {
                     acc.insert(k.clone(), VTime::merge(&va, &vb));
                 } else {
@@ -161,8 +176,8 @@ impl<K, V> UWMap<K, V> where K: UWMapKey, V: UWMapItem {
                 }
                 acc
             });
-        let all_removed = b_removed.iter()
-            .fold(a_removed.clone(), |mut acc, (k, vb)| {
+        let all_removed = b_rem.iter()
+            .fold(a_rem.clone(), |mut acc, (k, vb)| {
                 if let Some(va) = acc.remove(k) {
                     acc.insert(k.clone(), VTime::merge(&va, &vb));
                 } else {
@@ -186,10 +201,10 @@ impl<K, V> UWMap<K, V> where K: UWMapKey, V: UWMapItem {
         let removed = all_updated.iter()
             .fold(all_removed.clone(), |mut acc, (k, vu)| {
                 match acc.get(k) {
-                    Some(vr) if vu.partial_cmp(vr) == Some(Ordering::Less) => { },
-                    _ => {
+                    Some(vr) if vr.partial_cmp(vu) == Some(Ordering::Less) => { 
                         acc.remove(k);
-                    }
+                    },
+                    _ => {}
                 }
                 acc
             });

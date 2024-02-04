@@ -3,9 +3,9 @@ import { ReactSVGObjectState } from "../../types";
 import { CSSProperties, FC, useCallback } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { isObjectSelected } from "../../utility/methods";
-import { focusColor, unfocusColor } from "../../palette/color";
 import { CSS } from "@dnd-kit/utilities";
 import { PaddedDiv } from "../../utility/components";
+import { CodeFragment } from "./CodeFragment";
 
 type PathCodeProps = {
   depth: number,
@@ -39,23 +39,18 @@ export const PathCode: FC<PathCodeProps> = (props) => {
     setNodeRef,
     transform,
     transition
-  } = useSortable({ id: props.data.id, data: {something: "path moved"} });
+  } = useSortable({ id: props.data.id });
   const path = props.data.points.map((p, i) => [p.id, `${i == 0 ? "" : " "}${toPathString(p)}`]);
   const [selectedObject, setSelectedObject] = props.selectedObjectState;
   const onClick = useCallback(() => {
     setSelectedObject({ type: "PATH", ...props.data});
   }, [setSelectedObject, props]);
-  const background = isObjectSelected(props.data.id, selectedObject) ? focusColor : unfocusColor;
-  const style: CSSProperties = { 
-    overflow: "hidden",
-    whiteSpace: "nowrap",
-    background, 
-    cursor: "pointer"
-  };
   const divStyle: CSSProperties = {
     transition, 
     transform: CSS.Transform.toString(transform)
   };
+  const [ fillRed, fillGreen, fillBlue, fillOpacity ] = props.data.fill;
+  const [ strokeRed, strokeGreen, strokeBlue, strokeOpacity ] = props.data.stroke;
   return (
     <PaddedDiv
     depth={props.depth}
@@ -64,13 +59,28 @@ export const PathCode: FC<PathCodeProps> = (props) => {
     {...attributes}
     {...listeners}
     >
-      <code onClick={onClick} style={style}>{"<path d=\""}</code>
+      <CodeFragment
+        noRoundRight
+        noRightPadding
+        selected={isObjectSelected(props.data.id, selectedObject)} 
+        onClick={onClick}>{`<path d="`}</CodeFragment>
       {
         path.map(([id, p]) => (
-          <code key={id} onClick={onClick} style={style}>{p}</code>
+          <CodeFragment key={id} 
+            noRoundLeft
+            noRoundRight
+            noLeftPadding
+            noRightPadding
+            selected={isObjectSelected(props.data.id, selectedObject)}
+            onClick={onClick}>{p}</CodeFragment>
         ))
       }
-      <code style={style}>{"\"/>"}</code>
+      <CodeFragment 
+        noRoundLeft
+        noLeftPadding
+        selected={isObjectSelected(props.data.id, selectedObject)} 
+        onClick={onClick}
+      >{`" fill="rgba(${fillRed}, ${fillGreen}, ${fillBlue}, ${fillOpacity})" stroke="rgba(${strokeRed}, ${strokeGreen}, ${strokeBlue}, ${strokeOpacity})" stroke-width="${props.data.stroke_width}" opacity="${props.data.opacity}" />`}</CodeFragment>
     </PaddedDiv>
   )
 }

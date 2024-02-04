@@ -23,7 +23,7 @@ impl VTime {
         let Self(map_a) = a;
         let map_a = map_a.clone();
         let map_b = map_b.clone();
-        map_a.iter().fold(map_b, |mut acc, (ka, va)| { 
+        let map = map_a.iter().fold(map_b, |mut acc, (ka, va)| { 
             let vb = acc.get_mut(ka);
             if let Some(vb) = vb {
                 *vb = *va.max(vb);
@@ -32,7 +32,7 @@ impl VTime {
             }
             acc
         });
-        Self(map_a)
+        Self(map)
     }
 }
 
@@ -72,7 +72,7 @@ impl PartialOrd for VTime {
             .map(|k| k.clone())
             .collect::<HashSet<_>>();
         let Self(other_map) = other;
-        let other_keys = self_map
+        let other_keys = other_map
             .keys()
             .map(|k| k.clone())
             .collect::<HashSet<_>>();

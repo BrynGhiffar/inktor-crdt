@@ -62,6 +62,15 @@ impl SVGDoc {
         self.tree.edit_path(path_id, partial_path)
     }
 
+    pub fn edit_group(
+        &mut self,
+        group_id: String,
+        partial_group: PartialSVGGroup
+    ) {
+        console_log!("Editing group: {:?}", partial_group.fill);
+        self.tree.edit_group(group_id, partial_group)
+    }
+
     pub fn edit_path_point_type(
         &mut self, 
         path_id: String, 

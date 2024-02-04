@@ -1,15 +1,17 @@
 import { CSSProperties, FC, MutableRefObject, useCallback } from "react";
-import { SVGDoc } from "@brynghiffar/vect-crdt-rs";
+import { SVGDoc, SVGGroup } from "@brynghiffar/vect-crdt-rs";
 import { ReactSVGObjectState } from "../../types";
 import { useSortable } from "@dnd-kit/sortable";
 import { isObjectSelected } from "../../utility/methods";
 import { CSS } from "@dnd-kit/utilities";
 import { PaddedDiv } from "../../utility/components";
-import { focusColor, unfocusColor } from "../../palette/color";
+import { CodeFragment } from "./CodeFragment";
+import { toRgbaString } from "./util";
 
 type GroupCodeProps = {
   id: string,
   depth: number,
+  data: SVGGroup,
   docRef: MutableRefObject<SVGDoc>,
   selectedObjectState: ReactSVGObjectState
   fetchSVGDoc: () => void,
@@ -24,14 +26,7 @@ export const GroupOpenCode: FC<GroupCodeProps> = props => {
     transition
   } = useSortable({ id: props.id });
   const [selectedObject, setSelectedObject] = props.selectedObjectState;
-  const background = isObjectSelected(props.id, selectedObject) ? focusColor : unfocusColor;
   const onClick = useCallback(() => setSelectedObject({ type: "GROUP", id: props.id }), [props, setSelectedObject]);
-  const style: CSSProperties = { 
-    overflow: "hidden",
-    whiteSpace: "nowrap",
-    background, 
-    cursor: "pointer"
-  };
   const divStyle: CSSProperties = {
     transition, 
     transform: CSS.Transform.toString(transform)
@@ -44,10 +39,10 @@ export const GroupOpenCode: FC<GroupCodeProps> = props => {
       {...attributes}
       {...listeners}
     >
-      <code
-        style={style}
+      <CodeFragment
+        selected={isObjectSelected(props.id, selectedObject)}
         onClick={onClick}
-      >{`<g id="${props.id}">`}</code>
+      >{`<g id="${props.id}"${toRgbaString("fill", props.data.fill)}${toRgbaString("stroke", props.data.stroke)}${props.data.stroke_width !== null ? `stroke-width=${props.data.stroke_width}` : ""}>`}</CodeFragment>
     </PaddedDiv>
   )
 };
@@ -70,9 +65,7 @@ export const GroupCloseCode: FC<GroupCloseCodeProps> = (props) => {
     transition
   } = useSortable({ id: props.id, disabled: true });
   const [selectedObject, setSelectedObject] = props.selectedObjectState;
-  const background = isObjectSelected(realId, selectedObject) ? focusColor : unfocusColor;
   const onClick = useCallback(() => setSelectedObject({ type: "GROUP", id: realId }), [realId, setSelectedObject]);
-  const style = { background, cursor: "pointer" };
   const divStyle: CSSProperties = {
     transition, 
     transform: CSS.Transform.toString(transform)
@@ -85,10 +78,10 @@ export const GroupCloseCode: FC<GroupCloseCodeProps> = (props) => {
     {...attributes}
     {...listeners}
     >
-      <code
-        style={style}
+      <CodeFragment
+        selected={isObjectSelected(realId, selectedObject)}
         onClick={onClick}
-      >{`</g>`}</code>
+      >{`</g>`}</CodeFragment>
     </PaddedDiv>
   )
 };

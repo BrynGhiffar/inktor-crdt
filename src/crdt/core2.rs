@@ -1,4 +1,6 @@
-use std::collections::hash_map::Entry;
+use std::borrow::BorrowMut;
+
+use rand::{thread_rng, Rng, distributions::Open01};
 
 use crate::prelude::*;
 
@@ -7,7 +9,7 @@ pub struct MoveLog {
     old_group_id: Option<NodeID>,
     new_group_id: Option<NodeID>,
     object_id: NodeID,
-    index: usize,
+    index: f32,
     timestamp: UnixEpochTimeNanos
 }
 
@@ -20,11 +22,111 @@ static NEW_NODE_ROOT_ID: &'static str = "NEW_NODES_ROOT_ID";
 //     index: usize,
 // }
 
+#[derive(Clone, Serialize, Deserialize)]
+pub struct LWWNodeMapItem {
+    object: LWWReg<LWWSVGObject>,
+    parent_id: LWWReg<Option<NodeID>>,
+    index: LWWReg<f32>,
+}
+
+impl LWWNodeMapItem {
+    pub fn new(NodeMapItem { object, parent_id, index }: NodeMapItem) -> Self {
+        Self { 
+            object: LWWReg::new(object.into()), 
+            parent_id: LWWReg::new(parent_id), 
+            index: LWWReg::new(index)
+        }
+    }
+    
+    pub fn update_object(&mut self, object: SVGObject) {
+        self.object.set(object.into());
+    }
+
+    pub fn update_circle(&mut self, edits: PartialSVGCircle) {
+        let LWWSVGObject::Circle(ref mut circle) = self.object.val.borrow_mut() else { return; };
+        circle.apply_some(edits);
+    }
+
+    pub fn update_group(&mut self, edits: PartialSVGGroup) {
+        let LWWSVGObject::Group(ref mut g) = self.object.val.borrow_mut() else { return; };
+        g.apply_some(edits);
+    }
+
+    pub fn update_rectangle(&mut self, edits: PartialSVGRectangle) {
+        let LWWSVGObject::Rectangle(ref mut rect) = self.object.val.borrow_mut() else { return; };
+        rect.apply_some(edits);
+    }
+
+    pub fn update_path(&mut self, edits: PartialSVGPath) {
+        let LWWSVGObject::Path(ref mut path) = self.object.val.borrow_mut() else { return; };
+        path.apply_some(edits);
+    }
+
+    pub fn update_path_points(&mut self, points: Vec<SVGPathCommand>) {
+        let LWWSVGObject::Path(ref mut path) = self.object.val.borrow_mut() else { return; };
+        path.set_points(points);
+    }
+
+    pub fn update_parent_id(&mut self, parent_id: Option<NodeID>) {
+        self.parent_id.set(parent_id);
+    }
+
+    pub fn update_index(&mut self, index: f32) {
+        self.index.set(index);
+    }
+
+    pub fn value(&self) -> NodeMapItem {
+        NodeMapItem { 
+            object: self.object.value().value(), 
+            parent_id: self.parent_id.value().clone(), 
+            index: self.index.value().clone()
+        }
+    }
+}
+
+impl From<NodeMapItem> for LWWNodeMapItem {
+    fn from(value: NodeMapItem) -> Self {
+        Self::new(value)
+    }
+}
+
+pub struct NodeMapItem {
+    object: SVGObject,
+    parent_id: Option<NodeID>,
+    index: f32,
+}
+
+impl Mergeable for LWWNodeMapItem {
+    fn merge(&self, other: &Self) -> Self {
+        let object = match (self.object.value(), other.object.value()) {
+            (LWWSVGObject::Group(g1), LWWSVGObject::Group(g2)) => {
+                LWWReg::new(LWWSVGObject::Group(g1.merge(g2)))
+            },
+            (LWWSVGObject::Circle(c1), LWWSVGObject::Circle(c2)) => {
+                LWWReg::new(LWWSVGObject::Circle(c1.merge(c2)))
+            },
+            (LWWSVGObject::Path(p1), LWWSVGObject::Path(p2)) => {
+                LWWReg::new(LWWSVGObject::Path(p1.merge(p2)))
+            },
+            (LWWSVGObject::Rectangle(r1), LWWSVGObject::Rectangle(r2)) => {
+                LWWReg::new(LWWSVGObject::Rectangle(r1.merge(r2)))
+            },
+            (_, _) => { 
+                self.object.merge(&other.object) 
+            }
+        };
+        Self {
+            object,
+            parent_id: self.parent_id.clone(),
+            index: self.index.merge(&other.index)
+        }
+    }
+}
+
 pub struct SVGDocCrdt2 {
     replica_id: ReplicaId,
-    node_map: UWMap<NodeID, SVGObject>,
-    parent: HashMap<NodeID, (Option<NodeID>, usize, UnixEpochTimeNanos)>,
-    ordering: HashMap<Option<NodeID>, Vec<NodeID>>,
+    node_map: UWMap<NodeID, LWWNodeMapItem>,
+    // parent: HashMap<NodeID, (Option<NodeID>, f32)>,
     move_history: Vec<MoveLog>,
     send_buffer: Vec<MoveLog>,
 }
@@ -34,8 +136,6 @@ impl SVGDocCrdt2 {
         Self { 
             replica_id,
             node_map: UWMap::new(), 
-            parent: HashMap::new(), 
-            ordering: HashMap::new(),
             move_history: Vec::new(),
             send_buffer: Vec::new()
         }
@@ -43,22 +143,87 @@ impl SVGDocCrdt2 {
 
     pub fn clear(&mut self) {
         self.node_map = UWMap::new();
-        self.parent = HashMap::new();
         self.move_history = Vec::new();
         self.send_buffer = Vec::new();
     }
     
     fn is_ancestor(&self, object1_id: &str, object2_id: &str) -> bool{
         // Is object1 an ancestor of object2
-        let Some((Some(parent), _, _)) = self.parent.get(object2_id) else { return false; };
+        let Some(NodeMapItem { parent_id: Some(parent), .. }) = self.node_map
+            .get(&object2_id.to_string()) 
+            .map(|v| v.value())
+            else { return false; };
         if parent == object1_id { return true; }
-        return self.is_ancestor(object1_id, parent);
+        return self.is_ancestor(object1_id, &parent);
+    }
+
+    fn get_children(&self, object_id: &Option<NodeID>) -> Option<Vec<(f32, NodeID)>> {
+        // Returns the children of a group node or root node.
+        if let Some(object_id) = object_id {
+            if let Some(NodeMapItem { object: SVGObject::Group(_), .. }) = self.node_map
+                .get(object_id)
+                .map(|v| v.value()) {}
+            else { return None; }
+        }
+        let mut res = self.node_map.value()
+            .iter()
+            .map(|(k, v)| (k, v.value()))
+            .fold(Vec::new(), |mut acc, (node_id, NodeMapItem { parent_id, index: idx, .. })| {
+                if parent_id != *object_id { return acc; }
+                acc.push((idx.clone(), node_id.clone()));
+                acc
+            });
+        res.sort_by(|(idx_a, _), (idx_b, _)| idx_a.total_cmp(idx_b));
+        Some(res)
+    }
+
+    fn get_fractional_index_insert_at(&self, parent_id: &Option<NodeID>, object_id: &NodeID, index: Option<usize>) -> Option<f32> {
+        // Returns the children of a group node or root node.
+        console_log!("Target index: {:?}", index);
+        let children = match self.get_children(parent_id) {
+            Some(v) => v,
+            None => return None,
+        };
+
+        let children = children.iter()
+            .filter(|(_, node_id)| node_id != object_id)
+            .collect::<Vec<_>>();
+        
+        if children.len() == 0 {
+            let val = Some(thread_rng().sample(Open01));
+            return val;
+        }
+        let generate_last = || {
+            let (last, _) = children.last().unwrap();
+            let diff = 1.0 - last;
+            return Some(last + thread_rng().sample::<f32, _>(Open01) * diff);
+        };
+        let generate_first = || {
+            let (first, _) = children.first().unwrap();
+            console_log!("Generate first: {}", first);
+            return Some(thread_rng().sample::<f32, _>(Open01) * first);
+        };
+        let index = match index {
+            Some(index) => index,
+            None => return generate_last(),
+        };
+        if index >= children.len() {
+            return generate_last();
+        }
+        if index == 0 {
+            return generate_first();
+        }
+        let (lower, _) = children.get(index - 1).unwrap();
+        let (upper, _) = children.get(index).unwrap();
+        let rr = thread_rng().sample::<f32, _>(Open01);
+        console_log!("lower: {}, upper: {}", lower, upper);
+        return Some(lower + rr * (upper - lower));
     }
 
     pub fn get_group(&self, group_id: NodeID) -> Option<SVGGroup> {
         self.node_map.get(&group_id).map(|r| 
-            match r.clone() {
-                SVGObject::Group(g) => Some(g),
+            match r.value() {
+                NodeMapItem { object: SVGObject::Group(g), .. } => Some(g),
                 _ => None
             }
         )
@@ -67,8 +232,8 @@ impl SVGDocCrdt2 {
 
     pub fn get_circle(&self, circle_id: NodeID) -> Option<SVGCircle>{
         self.node_map.get(&circle_id).map(|r| 
-            match r.clone() {
-                SVGObject::Circle(circle) => Some(circle),
+            match r.value() {
+                NodeMapItem { object: SVGObject::Circle(circle), .. } => Some(circle),
                 _ => None
             }
         )
@@ -78,8 +243,8 @@ impl SVGDocCrdt2 {
     pub fn get_rectangle(&self, rectangle_id: NodeID) -> Option<SVGRectangle> {
         self.node_map.get(&rectangle_id)
             .map(|r| 
-                match r.clone() {
-                    SVGObject::Rectangle(r) => Some(r),
+                match r.value() {
+                    NodeMapItem { object: SVGObject::Rectangle(r), .. } => Some(r),
                     _ => None
                 }
             )
@@ -88,8 +253,8 @@ impl SVGDocCrdt2 {
 
     pub fn get_path(&self, path_id: NodeID) -> Option<SVGPath> {
         self.node_map.get(&path_id)
-            .map(|r| match r.clone() {
-                SVGObject::Path(p) => Some(p),
+            .map(|r| match r.value() {
+                NodeMapItem { object: SVGObject::Path(p), .. } => Some(p),
                 _ => None
             })
             .flatten()
@@ -100,12 +265,23 @@ impl SVGDocCrdt2 {
         group_id: Option<String>, 
         partial_group: PartialSVGGroup
     ) {
+        if let Some(group_id) = group_id.clone() {
+            match self.node_map.get(&group_id).map(|v| v.value()) {
+                Some(NodeMapItem { object: SVGObject::Group(_), .. }) => {},
+                _ => return,
+            }
+        }
         let mut group = SVGGroup::default();
         group.apply_some(partial_group);
         let new_group_id = gen_str_id();
         group.id = new_group_id.clone();
-        self.node_map.insert(self.replica_id.clone(), new_group_id.clone(), SVGObject::Group(group));
-        self.parent.insert(new_group_id.clone(), (Some(NEW_NODE_ROOT_ID.to_string()), 0, epoch_now_nanos()));
+        let item = NodeMapItem {
+            object: SVGObject::Group(group),
+            parent_id: Some(NEW_NODE_ROOT_ID.to_string()),
+            index: 0.5
+        };
+        self.node_map.insert(self.replica_id.clone(), new_group_id.clone(), item.into());
+        // self.parent.insert(new_group_id.clone(), (Some(NEW_NODE_ROOT_ID.to_string()), 0.5));
         self.move_object(group_id, new_group_id, None);
     }
 
@@ -114,12 +290,22 @@ impl SVGDocCrdt2 {
         group_id: Option<String>, 
         partial_circle: PartialSVGCircle
     ) {
+        if let Some(group_id) = group_id.clone() {
+            match self.node_map.get(&group_id).map(|v| v.value()) {
+                Some(NodeMapItem { object: SVGObject::Group(_), .. }) => {},
+                _ => return,
+            }
+        }
         let mut circle = SVGCircle::default();
         circle.apply_some(partial_circle);
         let circle_id = gen_str_id();
         circle.id = circle_id.clone();
-        self.node_map.insert(self.replica_id.clone(), circle_id.clone(), SVGObject::Circle(circle));
-        self.parent.insert(circle_id.clone(), (Some(NEW_NODE_ROOT_ID.to_string()), 0, epoch_now_nanos()));
+        let item = NodeMapItem {
+            object: SVGObject::Circle(circle),
+            parent_id: Some(NEW_NODE_ROOT_ID.to_string()),
+            index: 0.5,
+        };
+        self.node_map.insert(self.replica_id.clone(), circle_id.clone(), item.into());
         self.move_object(group_id, circle_id, None);
     }
 
@@ -128,12 +314,23 @@ impl SVGDocCrdt2 {
         group_id: Option<String>,
         partial_rectangle: PartialSVGRectangle
     ) {
+        if let Some(group_id) = group_id.clone() {
+            match self.node_map.get(&group_id).map(|v| v.value()) {
+                Some(NodeMapItem { object: SVGObject::Group(_), .. }) => {},
+                _ => return,
+            }
+        }
         let mut rectangle = SVGRectangle::default();
         rectangle.apply_some(partial_rectangle);
         let rect_id = gen_str_id();
         rectangle.id = rect_id.clone();
-        self.node_map.insert(self.replica_id.clone(), rect_id.clone(), SVGObject::Rectangle(rectangle));
-        self.parent.insert(rect_id.clone(), (Some(NEW_NODE_ROOT_ID.to_string()), 0, epoch_now_nanos()));
+        let item = NodeMapItem {
+            object: SVGObject::Rectangle(rectangle),
+            parent_id: Some(NEW_NODE_ROOT_ID.to_string()),
+            index: 0.5
+        };
+        self.node_map.insert(self.replica_id.clone(), rect_id.clone(), item.into());
+        // self.parent.insert(rect_id.clone(), (Some(NEW_NODE_ROOT_ID.to_string()), 0.5));
         self.move_object(group_id, rect_id, None);
     }
 
@@ -142,12 +339,22 @@ impl SVGDocCrdt2 {
         group_id: Option<NodeID>,
         partial_path: PartialSVGPath
     ) {
+        if let Some(group_id) = group_id.clone() {
+            match self.node_map.get(&group_id).map(|v| v.value()) {
+                Some(NodeMapItem { object: SVGObject::Group(_), .. }) => {},
+                _ => return,
+            }
+        }
         let mut path = SVGPath::default();
         path.apply_some(partial_path);
         let path_id = gen_str_id();
         path.id = path_id.clone();
-        self.node_map.insert(self.replica_id.clone(), path_id.clone(), SVGObject::Path(path));
-        self.parent.insert(path_id.clone(), (Some(NEW_NODE_ROOT_ID.to_string()), 0, epoch_now_nanos()));
+        let item = NodeMapItem {
+            object: SVGObject::Path(path),
+            parent_id: Some(NEW_NODE_ROOT_ID.to_string()),
+            index: 0.5
+        };
+        self.node_map.insert(self.replica_id.clone(), path_id.clone(), item.into());
         self.move_object(group_id, path_id, None);
     }
 
@@ -157,7 +364,11 @@ impl SVGDocCrdt2 {
         command_type: SVGPathCommandType,
         pos: Vec2
     ) {
-        let Some(mut path) = self.get_path(path_id.clone()) else { return; };
+        let Some(NodeMapItem { object: SVGObject::Path(path), parent_id, index }) = self.node_map
+            .get(&path_id)
+            .map(|v| v.value())
+            else { return; };
+        let mut path = path.clone();
         let point_id = gen_str_id();
         match command_type {
             SVGPathCommandType::START => {
@@ -186,31 +397,61 @@ impl SVGDocCrdt2 {
                 path.points.push(SVGPathCommand::BezierQuadReflect { id: point_id, pos });
             }
         };
-        self.node_map.insert(self.replica_id.clone(), path_id, SVGObject::Path(path));
+        let item = NodeMapItem {
+            object: SVGObject::Path(path.clone()),
+            parent_id: parent_id.clone(),
+            index: index.clone()
+        };
+        self.node_map.insert(self.replica_id.clone(), path_id, item.into());
     }
 
     pub fn edit_circle(&mut self, circle_id: NodeID, edits: PartialSVGCircle) {
-        let Some(mut circle) = self.get_circle(circle_id.clone()) else { return; };
-        circle.apply_some(edits); 
-        self.node_map.insert(self.replica_id.clone(), circle_id, SVGObject::Circle(circle));
+        let Some(NodeMapItem { object: SVGObject::Circle(_), .. }) = self.node_map
+            .get(&circle_id.clone()) 
+            .map(|v| v.value())
+            else { return; };
+        // let mut circle = circle.clone();
+        // circle.apply_some(edits); 
+        let Some(item) = self.node_map.get(&circle_id) else { return; };
+        let mut item = item.clone();
+        item.update_circle(edits);
+        self.node_map.insert(self.replica_id.clone(), circle_id, item);
     }
 
     pub fn edit_group(&mut self, group_id: NodeID, edits: PartialSVGGroup) {
-        let Some(mut group) = self.get_group(group_id.clone()) else { return; };
-        group.apply_some(edits);
-        self.node_map.insert(self.replica_id.clone(), group_id, SVGObject::Group(group));
+        let Some(NodeMapItem { object: SVGObject::Group(_), .. }) = self.node_map
+            .get(&group_id)
+            .map(|v| v.value()) else { return; };
+        let Some(item) = self.node_map.get(&group_id) else { return; };
+        let mut item = item.clone();
+        item.update_group(edits);
+        self.node_map.insert(self.replica_id.clone(), group_id, item);
     }
 
     pub fn edit_rectangle(&mut self, rectangle_id: NodeID, edits: PartialSVGRectangle) {
-        let Some(mut rect) = self.get_rectangle(rectangle_id.clone()) else { return; };
-        rect.apply_some(edits);
-        self.node_map.insert(self.replica_id.clone(), rectangle_id, SVGObject::Rectangle(rect));
+        let Some(NodeMapItem { object: SVGObject::Rectangle(_), .. }) = self.node_map
+            .get(&rectangle_id)
+            .map(|v| v.value()) else { return; };
+        // let mut rect = rect.clone();
+        // rect.apply_some(edits);
+        let Some(item) = self.node_map.get(&rectangle_id) else { return; };
+        let mut item = item.clone();
+        item.update_rectangle(edits);
+        // item.update_object(SVGObject::Rectangle(rect));
+        self.node_map.insert(self.replica_id.clone(), rectangle_id, item);
     }
 
     pub fn edit_path(&mut self, path_id: NodeID, edits: PartialSVGPath) {
-        let Some(mut path) = self.get_path(path_id.clone()) else { return; };
-        path.apply_some(edits);
-        self.node_map.insert(self.replica_id.clone(), path_id, SVGObject::Path(path));
+        let Some(NodeMapItem { object: SVGObject::Path(_), .. }) = self.node_map
+            .get(&path_id)
+            .map(|v| v.value()) else { return; };
+        // let mut path = path.clone();
+        // path.apply_some(edits);
+        let Some(item) = self.node_map.get(&path_id) else { return; };
+        let mut item = item.clone();
+        item.update_path(edits);
+        // item.update_object(SVGObject::Path(path));
+        self.node_map.insert(self.replica_id.clone(), path_id, item);
     }
 
     pub fn edit_path_point_type(
@@ -219,7 +460,9 @@ impl SVGDocCrdt2 {
         point_id: NodeID, 
         command_type: SVGPathCommandType
     ) {
-        let Some(mut path) = self.get_path(path_id.clone()) else { return; };
+        let Some(NodeMapItem { object: SVGObject::Path(path), .. }) = self.node_map
+            .get(&path_id)
+            .map(|v| v.value()) else { return; };
         let mut points = path.points.clone();
         let idx = points.iter().position(|p| p.get_id() == &point_id);
         let Some(idx) = idx else { return; };
@@ -251,8 +494,12 @@ impl SVGDocCrdt2 {
             },
             _ => {}
         };
-        path.points = points;
-        self.node_map.insert(self.replica_id.clone(), point_id, SVGObject::Path(path));
+        // path.points = points;
+        let Some(item) = self.node_map.get(&path_id) else { return; };
+        let mut item = item.clone();
+        item.update_path_points(points);
+        // item.update_object(SVGObject::Path(path));
+        self.node_map.insert(self.replica_id.clone(), path_id, item);
     }
 
     pub fn edit_path_point_pos(
@@ -261,7 +508,10 @@ impl SVGDocCrdt2 {
         point_id: NodeID,
         new_pos: Vec2
     ) {
-        let Some(mut path) = self.get_path(path_id) else { return; };
+        let Some(NodeMapItem { object: SVGObject::Path(path), .. }) = self.node_map
+            .get(&path_id)
+            .map(|v| v.value()) else { return; };
+        // let mut path = path.clone();
         let mut points = path.points.clone();
         let Some(idx) = points.iter().position(|p| p.get_id() == point_id) else {
             return;
@@ -289,8 +539,12 @@ impl SVGDocCrdt2 {
             },
             _ => {}
         };
-        path.points = points;
-        self.node_map.insert(self.replica_id.clone(), point_id, SVGObject::Path(path));
+        // path.points = points;
+        let Some(item) = self.node_map.get(&path_id) else { return; };
+        let mut item = item.clone();
+        item.update_path_points(points);
+        // item.update_object(SVGObject::Path(path));
+        self.node_map.insert(self.replica_id.clone(), path_id, item);
     }
 
     pub fn edit_path_point_handle1(
@@ -299,7 +553,10 @@ impl SVGDocCrdt2 {
         point_id: NodeID,
         new_handle1: Vec2
     ) {
-        let Some(mut path) = self.get_path(path_id) else { return; };
+        let Some(NodeMapItem { object: SVGObject::Path(path), .. }) = self.node_map
+            .get(&path_id)
+            .map(|v| v.value()) else { return; };
+        // let mut path = path.clone();
         let mut points = path.points.clone();
         let Some(idx) = points.iter().position(|p| p.get_id() == point_id) else {
             return;
@@ -321,8 +578,12 @@ impl SVGDocCrdt2 {
             },
             _ => {}
         };
-        path.points = points;
-        self.node_map.insert(self.replica_id.clone(), point_id, SVGObject::Path(path));
+        // path.points = points;
+        let Some(item) = self.node_map.get(&path_id) else { return; };
+        let mut item = item.clone();
+        // item.update_object(SVGObject::Path(path));
+        item.update_path_points(points);
+        self.node_map.insert(self.replica_id.clone(), path_id, item);
     }
 
     pub fn edit_path_point_handle2(
@@ -331,7 +592,10 @@ impl SVGDocCrdt2 {
         point_id: NodeID,
         new_handle2: Vec2
     ) {
-        let Some(mut path) = self.get_path(path_id) else { return; };
+        let Some(NodeMapItem { object: SVGObject::Path(path), .. }) = self.node_map
+            .get(&path_id)
+            .map(|v| v.value()) else { return; };
+        // let mut path = path.clone();
         let mut points = path.points.clone();
         let Some(idx) = points.iter().position(|p| p.get_id() == point_id) else {
             return;
@@ -347,12 +611,17 @@ impl SVGDocCrdt2 {
             },
             _ => {}
         };
-        path.points = points;
-        self.node_map.insert(self.replica_id.clone(), point_id, SVGObject::Path(path));
+        // path.points = points;
+        let Some(item) = self.node_map.get(&path_id) else { return; };
+        let mut item = item.clone();
+        // item.update_object(SVGObject::Path(path));
+        item.update_path_points(points);
+        self.node_map.insert(self.replica_id.clone(), path_id, item);
     }
 
     pub fn remove_object(&mut self, node_id: NodeID) {
         self.node_map.remove(self.replica_id.clone(), node_id.clone());
+        // let Some(group_id) = self.parent.remove(&node_id.clone()) else { return; };
     }
 
     pub fn remove_path_point(
@@ -360,88 +629,82 @@ impl SVGDocCrdt2 {
         path_id: NodeID,
         point_id: NodeID
     ) {
-        let Some(mut path) = self.get_path(path_id.clone()) else { return; };
-        let index = path.points.iter()
+        let Some(NodeMapItem { object: SVGObject::Path(path), .. }) = self.node_map
+            .get(&path_id)
+            .map(|v| v.value()) else { return; };
+        let mut points = path.points;
+        let index = points.iter()
             .position(|o| o.get_id().eq(&point_id));
         let Some(index) = index else { return; };
-        path.points.remove(index);
-        self.node_map.insert(self.replica_id.clone(), path_id, SVGObject::Path(path));
+        points.remove(index);
+        let Some(item) = self.node_map.get(&path_id) else { return; };
+        let mut item = item.clone();
+        // item.update_object(SVGObject::Path(path));
+        item.update_path_points(points);
+        self.node_map.insert(self.replica_id.clone(), path_id, item);
     }
 
-    fn update_ordering(
-        &mut self, 
-        old_group_id: Option<NodeID>, 
-        new_group_id: Option<NodeID>,
-        object_id: NodeID,
-        index: Option<usize>
-    ) -> usize {
-        match self.ordering.entry(old_group_id) {
-            Entry::Occupied(mut o) => {
-                let index = o.get().iter().position(|o| o == &object_id);
-                if let Some(index) = index {
-                    o.get_mut().remove(index);
-                }
-            },
-            Entry::Vacant(v) => {
-                v.insert(Vec::new());
-            }
-        };
-
-        match self.ordering.entry(new_group_id) {
-            Entry::Occupied(mut o) => {
-                let vecc = o.get_mut();
-                if let Some(index) = index {
-                    vecc.insert(index, object_id.clone());
-                    return index;
-                } else {
-                    vecc.push(object_id.clone());
-                    return vecc.len();
-                }
-            },
-            Entry::Vacant(v) => {
-                let mut vecc = Vec::new();
-                vecc.push(object_id.clone());
-                let length = vecc.len();
-                v.insert(vecc);
-                return length;
-            }
-        }
-    }
     pub fn move_object(&mut self, group_id: Option<NodeID>, object_id: String, index: Option<usize>) {
         let now = epoch_now_nanos();
-        let Some((old_group_id, _, _)) = self.parent.get(&object_id) else { return; };
+        let Some(NodeMapItem { parent_id: old_group_id, .. }) = self.node_map
+            .get(&object_id)
+            .map(|v| v.value()) else { return; };
         let old_group_id = old_group_id.clone();
         let Some(_) = self.node_map.get(&object_id).map(|o| o.clone()) else { return; };
         if let Some(group_id) = group_id {
             if self.is_ancestor(&object_id, &group_id) { return; }
 
-            let index = self.update_ordering(old_group_id.clone(), Some(group_id.clone()), object_id.clone(), index);
-            self.parent.insert(object_id.clone(), (Some(group_id.clone()), index, now));
-            self.node_map.inc_vtime(self.replica_id.clone(), object_id.clone());
+            // get Fractional index
+            let Some(index) = self.get_fractional_index_insert_at(&Some(group_id.clone()), &object_id, index) else { return; };
+            let Some(item) = self.node_map.get(&object_id) else { return; };
+            let mut item = item.clone();
+            item.update_parent_id(Some(group_id.clone()));
+            item.update_index(index);
+            self.node_map.insert(self.replica_id.clone(), object_id.clone(), item);
             let move_log = MoveLog { new_group_id: Some(group_id), old_group_id, index, object_id, timestamp: now };
             self.send_buffer.push(move_log.clone());
             self.move_history.push(move_log);
             return;
         }
-        let index = self.update_ordering(old_group_id.clone(), None, object_id.clone(), index);
-        self.parent.insert(object_id.clone(), (None, index, now));
-        self.node_map.inc_vtime(self.replica_id.clone(), object_id.clone());
+        // get fractional index
+
+        let Some(index) = self.get_fractional_index_insert_at(&None, &object_id, index) else { return; };
+        // self.parent.insert(object_id.clone(), (None, index));
+        let Some(item) = self.node_map.get(&object_id) else { return; };
+        let mut item = item.clone();
+        item.update_parent_id(None);
+        item.update_index(index);
+        self.node_map.insert(self.replica_id.clone(), object_id.clone(), item);
         let move_log = MoveLog { new_group_id: None, old_group_id, index, object_id, timestamp: now };
         self.send_buffer.push(move_log.clone());
         self.move_history.push(move_log);
     }
 
-    fn redo_move(&mut self, MoveLog { new_group_id, index, object_id, timestamp, old_group_id, .. }: MoveLog) {
+    fn redo_move(&mut self, MoveLog { new_group_id, index, object_id, .. }: MoveLog) {
+        let Some(NodeMapItem { object, .. }) = self.node_map.get(&object_id).map(|v| v.value()) else { return; };
         if let Some(new_group_id) = new_group_id.clone() {
             if self.is_ancestor(&object_id, &new_group_id) { return; }
         }
-        self.update_ordering(old_group_id, new_group_id.clone(), object_id.clone(), Some(index));
-        self.parent.insert(object_id, (new_group_id, index, timestamp));
+        let item = NodeMapItem {
+            object: object.clone(),
+            parent_id: new_group_id,
+            index
+        };
+        self.node_map.insert(self.replica_id.clone(), object_id, item.into());
     }
 
-    fn undo_move(&mut self, MoveLog { old_group_id, object_id, new_group_id, .. }: MoveLog) {
-        self.update_ordering(new_group_id, old_group_id.clone(), object_id.clone(), None);
-        self.parent.insert(object_id, (old_group_id, 0, 0));
+    fn undo_move(&mut self, MoveLog { old_group_id, object_id, .. }: MoveLog) {
+        // if self.node_map.get(&object_id).is_none() { return; }
+        let Some(NodeMapItem { object, .. }) = self.node_map
+            .get(&object_id)
+            .map(|v| v.value()) else { return; };
+        let item = NodeMapItem {
+            object: object.clone(),
+            parent_id: old_group_id,
+            index: 0.5
+        };
+        self.node_map.insert(self.replica_id.clone(), object_id, item.into());
+        // self.parent.insert(object_id, (old_group_id, 0.5));
     }
 
     fn add_to_move_log(&mut self, move_log: MoveLog) {
@@ -462,14 +725,14 @@ impl SVGDocCrdt2 {
         }
     }
 
-    fn merge_aux(&mut self, other_node_map: UWMap<NodeID, SVGObject>, mut move_logs: Vec<MoveLog>) {
+    fn merge_aux(&mut self, other_node_map: UWMap<NodeID, LWWNodeMapItem>, mut move_logs: Vec<MoveLog>) {
         self.node_map = UWMap::merge(&self.node_map, &other_node_map);
         for log in move_logs.drain(..) {
             self.add_to_move_log(log);
         }
     }
 
-    fn broadcast_aux(&mut self) -> (UWMap<String, SVGObject>, Vec<MoveLog>){
+    fn broadcast_aux(&mut self) -> (UWMap<String, LWWNodeMapItem>, Vec<MoveLog>){
         let res = (self.node_map.clone(), self.send_buffer.clone());
         self.send_buffer.clear();
         res
@@ -481,14 +744,14 @@ impl SVGDocCrdt2 {
     }
 
     pub fn merge(&mut self, data: String) {
-        type Tup = (UWMap<String, SVGObject>, Vec<MoveLog>);
+        type Tup = (UWMap<String, LWWNodeMapItem>, Vec<MoveLog>);
         let tup = serde_json::from_str::<Tup>(&data).ok();
         let Some((other_node_map, move_logs)) = tup else { return; };
         self.merge_aux(other_node_map, move_logs);
     }
 
     pub fn save(&self) -> String {
-        type Tup = (UWMap<String, SVGObject>, Vec<MoveLog>);
+        type Tup = (UWMap<String, LWWNodeMapItem>, Vec<MoveLog>);
         let node_map = self.node_map.clone();
         let move_history = self.move_history.clone();
         let tup: Tup = (node_map, move_history);
@@ -497,7 +760,7 @@ impl SVGDocCrdt2 {
 
     pub fn load(&mut self, data: String) {
         self.clear();
-        type Tup = (UWMap<String, SVGObject>, Vec<MoveLog>);
+        type Tup = (UWMap<String, LWWNodeMapItem>, Vec<MoveLog>);
         let tup = serde_json::from_str::<Tup>(&data).ok();
         let Some((other_node_map, move_logs)) = tup else { return; };
         self.merge_aux(other_node_map, move_logs);
@@ -510,12 +773,12 @@ impl SVGDocCrdt2 {
         };
         if is_visited { return; }
         visited.insert(object_id.clone(), true);
-        match self.parent.get(object_id) {
-            Some((Some(p), _, _)) => {
-                self.dfs(p, visited, res);
+        match self.node_map.get(object_id).map(|v| v.value()) {
+            Some(NodeMapItem { parent_id: Some(p), .. }) => {
+                self.dfs(&p, visited, res);
                 res.push(object_id.clone());
             },
-            Some((None, _, _)) => {
+            Some(NodeMapItem { parent_id: None, .. }) => {
                 res.push(object_id.clone());
             },
             _ => return,
@@ -525,65 +788,68 @@ impl SVGDocCrdt2 {
     fn top_sort_nodes(&self) -> Vec<NodeID> {
         let mut res = Vec::new();
         let mut visited = HashMap::new();
-        let mut keys = self.node_map.value()
-            .keys()
-            .map(|k| k.clone())
-            .collect::<Vec<_>>();
-        keys
-            .sort_by(|a, b| {
-                let (_, _, timestamp_a) = self.parent.get(a).unwrap();
-                let (_, _, timestamp_b) = self.parent.get(b).unwrap();
-                timestamp_a.cmp(timestamp_b)
-            });
-        // keys.reverse();
-        for object_id in keys.iter() {
+        let nodes = self.node_map.value();
+        for object_id in nodes.keys() {
             self.dfs(object_id, &mut visited, &mut res);
         }
         res
     }
+
 
     pub fn tree(&self) -> SVGDocTree {
         let mut res = SVGDocTree::new();
         let mut node_map = self.node_map.value();
         let mut nodes = self.top_sort_nodes();
         nodes.reverse();
-
+        console_log!("[BRANCHES] Rendering tree");
         // Apply index according to timestamp
         for node in nodes.iter() {
-            let Some((Some(group_id), _, _)) = self.parent.get(node) else { continue; };
-            let Some(ord_list) = self.ordering.get(&Some(group_id.clone())) else { continue; };
-            let Some(ord_ind) = ord_list.iter().position(|o| o == node) else { continue; };
-            match node_map.remove(group_id) {
-                Some(SVGObject::Group(g)) => {
+            let Some(NodeMapItem { parent_id: Some(group_id), index:  idx, .. }) = self.node_map.get(node).map(|v| v.value()) else { continue; };
+            match node_map.remove(&group_id).map(|v| v.value()) {
+                Some(NodeMapItem { object: SVGObject::Group(g), parent_id: g_parent_id, index: g_index }) => {
                     let mut group = g;
                     let mut i = group.children.len();
                     loop {
                         if i == 0 { break; }
                         let next_id = group.children[i - 1].get_id();
-                        let Some(nxt_ord_ind) = ord_list.iter().position(|o| o == next_id) else { continue; };
-                        if ord_ind > nxt_ord_ind { break; }
+                        let NodeMapItem { index: nxt_idx, .. } = self.node_map.get(&next_id.to_string())
+                            .map(|v| v.value())
+                            .expect("node is missing in parent");
+                        if nxt_idx < idx { break; }
                         i -= 1;
                     }
-                    let Some(object) = node_map.remove(node) else { 
-                        node_map.insert(group_id.clone(), SVGObject::Group(group));
+                    let Some(NodeMapItem { object, .. }) = node_map.remove(node).map(|v| v.value()) else { 
+                        let item = NodeMapItem {
+                            object: SVGObject::Group(group),
+                            parent_id: g_parent_id.clone(),
+                            index: g_index.clone()
+                        };
+                        node_map.insert(group_id.clone(), item.into());
                         continue;
                     };
                     group.children.insert(i, object);
-                    node_map.insert(group_id.clone(), SVGObject::Group(group));
+                    let item = NodeMapItem {
+                        object: SVGObject::Group(group),
+                        parent_id: g_parent_id.clone(),
+                        index: g_index.clone()
+                    };
+                    node_map.insert(group_id.clone(), item.into());
                 },
                 Some(o) => {
-                    node_map.insert(group_id.clone(), o);
+                    node_map.insert(group_id.clone(), o.into());
                 },
                 _ => {
                     node_map.remove(node);
                 },
             }
-        }
-        let Some(ord_list_root) = self.ordering.get(&None) else { return res };
-        res.children = node_map.drain().map(|(_, o)| o).collect();
-        res.children.sort_by_key(|o| {
-            ord_list_root.iter().position(|ss| ss == o.get_id()).unwrap()
+        };
+        console_log!("[BASE] Rendering tree");
+        let mut tmp = node_map.drain().map(|(_, o)| o.value()).collect::<Vec<_>>();
+        tmp.sort_by(|NodeMapItem { index: index_a, .. }, NodeMapItem { index: index_b, .. }| {
+            index_a.total_cmp(index_b)
         });
+        res.children = tmp.drain(..).map(|NodeMapItem { object, .. }| object).collect();
+        console_log!("[BASE] Finished");
         res
     }
 }
@@ -808,11 +1074,6 @@ mod tests {
             Some(SVGObject::Circle(circle)) => &circle.id,
             _ => panic!("Circle should exist at index 4")
         };
-        // println!("{} {}", first_id, act_first_id);
-        // println!("{} {}", second_id, act_second_id);
-        // println!("{} {}", third_id, act_third_id);
-        // println!("{} {}", fourth_id, act_fourth_id);
-        // println!("{} {}", fifth_id, act_fifth_id);
         assert_eq!(third_id, act_first_id);
         assert_eq!(fourth_id, act_second_id);
         assert_eq!(fifth_id, act_third_id);
@@ -1037,7 +1298,43 @@ mod tests {
         };
         doc1.remove_object(group_id.clone());
         let tree = doc1.tree();
-        // println!("{:?}", tree);
         assert_eq!(tree.children.len(), 0);
+    }
+
+    #[test]
+    fn merge_delete_then_edit() {
+        let r1 = "r1".to_string();
+        let r2 = "r2".to_string();
+
+        let mut doc1 = SVGDocCrdt2::new(r1);
+        let mut doc2 = SVGDocCrdt2::new(r2);
+
+        doc1.add_circle(None, PartialSVGCircle::empty());
+        let (d1_node_map, d1_move_logs) = doc1.broadcast_aux();
+        let (d2_node_map, d2_move_logs) = doc2.broadcast_aux();
+        doc2.merge_aux(d1_node_map, d1_move_logs);
+        doc1.merge_aux(d2_node_map, d2_move_logs);
+        let t1 = doc1.tree();
+        let circle_id = match t1.children.get(0) {
+            Some(SVGObject::Circle(c)) => &c.id,
+            _ => panic!("Circle should exist")
+        };
+        doc2.remove_object(circle_id.clone());
+        let mut edits = PartialSVGCircle::empty();
+        edits.opacity = Some(0.5);
+        doc1.edit_circle(circle_id.clone(), edits);
+
+        let (d1_node_map, d1_move_logs) = doc1.broadcast_aux();
+        let (d2_node_map, d2_move_logs) = doc2.broadcast_aux();
+        doc2.merge_aux(d1_node_map, d1_move_logs);
+        doc1.merge_aux(d2_node_map, d2_move_logs);
+
+        let t1 = doc2.tree();
+        match t1.children.get(0) {
+            Some(SVGObject::Circle(c)) => {
+                assert_eq!(c.opacity, 0.5);
+            },
+            _ => panic!("Circle should exist")
+        };
     }
 }

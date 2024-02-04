@@ -3,9 +3,9 @@ import { CSSProperties, FC, MutableRefObject } from "react";
 import { DroppableSVG, ReactSVGObjectState } from "../../types";
 import { SVGDoc } from "@brynghiffar/vect-crdt-rs";
 import { isObjectSelected } from "../../utility/methods";
-import { focusColor, unfocusColor } from "../../palette/color";
 import { CSS } from '@dnd-kit/utilities';
 import { PaddedDiv } from "../../utility/components";
+import { CodeFragment } from "./CodeFragment";
 
 type CircleCodeProps = {
   depth: number,
@@ -29,12 +29,6 @@ export const CircleCode: FC<CircleCodeProps> = (props) => {
   const opacity = circle.opacity;
   const [strokeRed, strokeGreen, strokeBlue, strokeOpacity ] = circle.stroke;
   const [selectedObject, setSelectedObject] = props.selectedObjectState;
-  const background = isObjectSelected(props.data.id, selectedObject) ? focusColor : unfocusColor;
-  const style: CSSProperties = { 
-    whiteSpace: "nowrap",
-    background, 
-    cursor: "pointer",
-  };
   const divStyle: CSSProperties = {
     transition, 
     transform: CSS.Transform.toString(transform)
@@ -47,8 +41,8 @@ export const CircleCode: FC<CircleCodeProps> = (props) => {
         {...attributes}
         {...listeners}
     >
-      <code
-        style={style}
+      <CodeFragment
+        selected={isObjectSelected(props.data.id, selectedObject)}
         onClick={() => setSelectedObject({ type: "CIRCLE", id: props.data.id })}
       >{`<circle 
         cx="${circle.pos.x}"
@@ -59,7 +53,7 @@ export const CircleCode: FC<CircleCodeProps> = (props) => {
         stroke-width="${circle.stroke_width}"
         opacity="${opacity}"/>`
       }
-      </code>
+      </CodeFragment>
     </PaddedDiv>
   )
 }

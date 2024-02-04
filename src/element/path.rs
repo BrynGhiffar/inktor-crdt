@@ -62,13 +62,13 @@ pub struct SVGPath {
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct PartialSVGPath {
     #[tsify(optional)]
-    fill: Option<Color>,
+    pub fill: Option<Color>,
     #[tsify(optional)]
-    stroke_width: Option<i32>,
+    pub stroke_width: Option<i32>,
     #[tsify(optional)]
-    stroke: Option<Color>,
+    pub stroke: Option<Color>,
     #[tsify(optional)]
-    opacity: Option<f32>
+    pub opacity: Option<f32>
 }
 
 impl partially::Partial for SVGPath {

@@ -22,11 +22,3 @@ pub fn empty_rectangle() -> PartialSVGRectangle {
         opacity: None
     }
 }
-
-pub fn empty_group() -> PartialSVGGroup {
-    PartialSVGGroup {
-        fill: None,
-        stroke_width: None,
-        stroke: None,
-    }
-}

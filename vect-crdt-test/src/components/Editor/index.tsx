@@ -1,15 +1,15 @@
-import { CSSProperties, FC, MutableRefObject, useCallback, useEffect, useState } from 'react';
+import { FC, MutableRefObject, useCallback, useEffect, useState } from 'react';
 import { SVGDoc } from "@brynghiffar/vect-crdt-rs";
 import { Configuration } from '../../components/Configuration';
 import { DroppableSVG, ReactSVGObjectState, SelectedObject } from '../../types';
 import { DndContext, DragEndEvent, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CircleCode } from '../../components/Code/circle';
-import { focusColor, unfocusColor } from '../../palette/color';
 import { RectangleCode } from '../../components/Code/rectangle';
 import { PathCode } from '../../components/Code/path';
 import { GroupCloseCode, GroupOpenCode } from '../../components/Code/group';
 import { getGroupId, getIndexInGroup } from '../../utility/methods';
+import { CodeFragment } from '../Code/CodeFragment';
 
 const mapper = (
   docRef: MutableRefObject<SVGDoc>,
@@ -43,6 +43,7 @@ const mapper = (
           key={`START_${obj.id}`}
           depth={obj.depth}
           docRef={docRef}
+          data={group}
           id={obj.id}
           fetchSVGDoc={fetchSVGDoc}
           selectedObjectState={selectedObjectState}
@@ -144,12 +145,11 @@ export const Editor: FC<EditorProps> = (props) => {
     }
     fetchSVGDoc();
   }, [droppableSVG, fetchSVGDoc, SVGDocRef]);
-  const background = "root" === selectedObject ? focusColor : unfocusColor;
-  const style: CSSProperties = { background, cursor: "pointer" };
+  const selected = "root" === selectedObject;
   return (
-    <div style={{minWidth: "0px", minHeight: "0px"}}>
-      <div style={{overflow: "scroll", }}>
-        <code style={style} onClick={() => setSelectedObject("root")}>{"<svg>"}</code>
+    <div style={{minWidth: "0px", minHeight: "0px"}} className="grid gap-2">
+      <div className="overflow-x-scroll border-gray-600 border bg-[#1F1F1F] rounded-lg p-2 scroll" style={{ scrollbarWidth: "thin" }}>
+        <CodeFragment selected={selected} onClick={() => setSelectedObject("root")}>{"<svg>"}</CodeFragment>
         <DndContext
           collisionDetection={closestCenter} 
           onDragEnd={onDragEnd}
@@ -165,7 +165,7 @@ export const Editor: FC<EditorProps> = (props) => {
             }
           </SortableContext>
         </DndContext>
-        <code style={style} onClick={() => setSelectedObject("root")}>{"</svg>"}</code>
+        <CodeFragment selected={selected} onClick={() => setSelectedObject("root")}>{"</svg>"}</CodeFragment>
       </div>
       <Configuration
         docRef={SVGDocRef}

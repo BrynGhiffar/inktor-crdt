@@ -2,6 +2,7 @@ pub mod circle;
 pub mod group;
 pub mod path;
 pub mod rectangle;
+pub mod lww;
 use crate::prelude::*;
 
 #[derive(Serialize, Deserialize, Tsify, Clone, Debug)]

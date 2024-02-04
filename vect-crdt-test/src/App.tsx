@@ -15,15 +15,15 @@ function App() {
     if (!h2) return;
     if (!h1) return;
     doc1.SVGDocRef.current.merge(h2);
-    doc1.fetchSVGDoc();
     doc2.SVGDocRef.current.merge(h1);
+    doc1.fetchSVGDoc();
     doc2.fetchSVGDoc();
   }, [doc2, doc1]);
 
 
   return (
-    <>
-    <NColumnGrid nColumns={3}>
+    <div className="p-4 h-screen">
+    <NColumnGrid nColumns={3} style={{ gridTemplateColumns: "1fr 200px 1fr"}}>
       <Editor
         docId={"t0"}
         fetchSVGDoc={doc1.fetchSVGDoc}
@@ -42,7 +42,7 @@ function App() {
         doc={doc2.SVGDocRef}
       />
     </NColumnGrid>
-    </>
+    </div>
   )
 }
 

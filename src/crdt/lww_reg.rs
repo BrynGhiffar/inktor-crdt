@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct LWWReg<T> where T: Clone {
-    val: T,
+    pub val: T,
     time: UnixEpochTimeNanos
 }
 
@@ -25,5 +25,11 @@ impl<T> LWWReg<T> where T: Clone {
             return LWWReg { val: b.val.clone(), time: b.time.clone() };
         }
         return LWWReg { val: a.val.clone(), time: a.time.clone() };
+    }
+}
+
+impl<T> Mergeable for LWWReg<T> where T: Clone {
+    fn merge(&self, other: &Self) -> Self {
+        Self::merge(self, other)
     }
 }

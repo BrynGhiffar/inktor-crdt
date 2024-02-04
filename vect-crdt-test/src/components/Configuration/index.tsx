@@ -62,9 +62,9 @@ type ConfigurationProps = {
 
 export const Configuration: FC<ConfigurationProps> = (props) => {
     return (
-        <div>
+        <>
             {configurationMapper(props.selectedObject, props.docRef, props.fetchSVGDoc)}
-        </div>
+        </>
     )
 }
 

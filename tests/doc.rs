@@ -23,14 +23,6 @@ fn empty_rectangle() -> PartialSVGRectangle {
     }
 }
 
-fn empty_group() -> PartialSVGGroup {
-    PartialSVGGroup {
-        fill: None,
-        stroke_width: None,
-        stroke: None,
-    }
-}
-
 #[test]
 fn test_create_circle() {
     let mut doc = SVGDoc::new("1".to_string());
@@ -135,12 +127,12 @@ fn test_edit_rectangle() {
 #[test]
 fn test_move_ancestor_into_grandchild_failed() {
     let mut doc = SVGDoc::new("1".to_string());
-    doc.add_group(None, empty_group());
+    doc.add_group(None, PartialSVGGroup::empty());
     let group1_id = match &doc.children().children[0] {
         SVGObject::Group(g) => g.id.clone(),
         _ => panic!("First should be group")
     };
-    doc.add_group(Some(group1_id.clone()), empty_group());
+    doc.add_group(Some(group1_id.clone()), PartialSVGGroup::empty());
     let children = doc.children();
     let group2_id = match children.children.get(0) {
         Some(SVGObject::Group(g)) => {

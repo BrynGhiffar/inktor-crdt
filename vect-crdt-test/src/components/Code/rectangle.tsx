@@ -3,9 +3,9 @@ import { SVGRectangle } from "@brynghiffar/vect-crdt-rs";
 import { ReactSVGObjectState } from "../../types";
 import { useSortable } from "@dnd-kit/sortable";
 import { isObjectSelected } from "../../utility/methods";
-import { focusColor, unfocusColor } from "../../palette/color";
 import { CSS } from "@dnd-kit/utilities";
 import { PaddedDiv } from "../../utility/components";
+import { CodeFragment } from "./CodeFragment";
 
 type RectangleCodeProps = {
   depth: number,
@@ -24,8 +24,6 @@ export const RectangleCode: FC<RectangleCodeProps> = props => {
   const [fillRed, fillGreen, fillBlue, fillOpacity] = props.data.fill;
   const [strokeRed, strokeGreen, strokeBlue, strokeOpacity] = props.data.stroke;
   const [selectedObject, setSelectedObject] = props.selectedObjectState;
-  const background = isObjectSelected(props.data.id, selectedObject) ? focusColor : unfocusColor;
-  const style = { background, cursor: "pointer" };
   const opacity = props.data.opacity;
   const divStyle: CSSProperties = {
     whiteSpace: "nowrap",
@@ -40,9 +38,9 @@ export const RectangleCode: FC<RectangleCodeProps> = props => {
       {...attributes}
       {...listeners}
     >
-      <code
+      <CodeFragment
+        selected={isObjectSelected(props.data.id, selectedObject)}
         onClick={() => setSelectedObject({ type: "RECTANGLE", ...props.data })}
-        style={style}
       >{`<rect
       x="${props.data.pos.x}" 
       y="${props.data.pos.y}" 
@@ -52,7 +50,7 @@ export const RectangleCode: FC<RectangleCodeProps> = props => {
       stroke-width="${props.data.stroke_width}"
       stroke="rgba(${strokeRed}, ${strokeGreen}, ${strokeBlue}, ${strokeOpacity})"
       opacity="${opacity}"/>`}
-      </code>
+      </CodeFragment>
     </PaddedDiv>
   )
 };
