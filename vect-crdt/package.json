@@ -21,8 +21,5 @@
   "bugs": {
     "url": "https://github.com/BrynGhiffar/vect-crdt-rs/issues"
   },
-  "homepage": "https://github.com/BrynGhiffar/vect-crdt-rs#readme",
-  "dependencies": {
-    "@brynghiffar/vect-crdt-rs": "0.0.0-alpha4"
-  }
+  "homepage": "https://github.com/BrynGhiffar/vect-crdt-rs#readme"
 }

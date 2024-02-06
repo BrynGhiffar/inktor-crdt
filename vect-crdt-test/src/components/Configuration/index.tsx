@@ -5,6 +5,9 @@ import { ConfigurationCircle } from "./circle";
 import { ConfigurationRectangle } from "./rectangle";
 import { ConfigurationPath } from "./path";
 import { ConfigurationGroup } from "./group";
+import { ConfigurationContainer } from "./ConfigurationContainer";
+import { ConfigurationTitle } from "./ConfigurationTitle";
+import { ConfigurationButton } from "./ConfigurationButton";
 
 type ConfigurationRootProps = {
     docRef: MutableRefObject<SVGDoc>,
@@ -33,24 +36,27 @@ const ConfigurationRoot: FC<ConfigurationRootProps> = (props) => {
     }, [props])
 
     return (
-        <>
-            <button
-                onClick={onClickAddCircle}
-            >Add Circle</button>
-            <button
-                onClick={onClickAddRectangle}
-            >
-                Add Rectangle
-            </button>
-            <button
-                onClick={onClickAddGroup}
-            >
-                Add Group
-            </button>
-            <button
-                onClick={onClickAddPath}
-            >Add Path</button>
-        </>
+        <ConfigurationContainer className="flex gap-2 flex-col">
+            <ConfigurationTitle title="Document" hideDeleteButton/>
+            <div className="grid grid-cols-4 gap-2">
+                <ConfigurationButton
+                    onClick={onClickAddCircle}
+                >Add Circle</ConfigurationButton>
+                <ConfigurationButton
+                    onClick={onClickAddRectangle}
+                >
+                    Add Rectangle
+                </ConfigurationButton>
+                <ConfigurationButton
+                    onClick={onClickAddGroup}
+                >
+                    Add Group
+                </ConfigurationButton>
+                <ConfigurationButton
+                    onClick={onClickAddPath}
+                >Add Path</ConfigurationButton>
+            </div>
+        </ConfigurationContainer>
     )
 }
 

@@ -1,1 +1,3 @@
-export { default } from "@brynghiffar/vect-crdt-rs";
+import crdt_rs = require("./crdt-rs");
+
+export default crdt_rs;

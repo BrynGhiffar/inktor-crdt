@@ -7,7 +7,7 @@ import { px } from "../../utility/methods";
 import { ConfigurationContainer } from "./ConfigurationContainer";
 import { ConfigurationTitle } from "./ConfigurationTitle";
 import { useShowHideColorPicker } from "./hook";
-import { ColorButton } from "./ColorButton";
+import { ColorButton } from "./Button";
 import { RgbaColor, RgbaColorPicker } from "react-colorful";
 import { ConfigurationButton } from "./ConfigurationButton";
 

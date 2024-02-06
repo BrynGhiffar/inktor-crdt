@@ -64,18 +64,45 @@ impl partially::Partial for LWWSVGGroup {
             || partial.stroke.is_some()
             || partial.stroke_width.is_some()
             || partial.opacity.is_some();
-        console_log!("fill: {:?}", partial.fill);
         if let Some(fill) = partial.fill {
-            self.fill.set(fill);
+            match fill {
+                JSNullable::Some { item: val } => {
+                    self.fill.set(Some(val));
+                },
+                JSNullable::None => {
+                    self.fill.set(None);
+                }
+            }
         }
         if let Some(stroke) = partial.stroke {
-            self.stroke.set(stroke);
+            match stroke {
+                JSNullable::Some { item } => {
+                    self.stroke.set(Some(item));
+                },
+                JSNullable::None => {
+                    self.stroke.set(None);
+                }
+            };
         }
         if let Some(stroke_width) = partial.stroke_width {
-            self.stroke_width.set(stroke_width);
+            match stroke_width {
+                JSNullable::Some { item } => {
+                    self.stroke_width.set(Some(item));
+                },
+                JSNullable::None => {
+                    self.stroke_width.set(None);
+                }
+            };
         }
         if let Some(opacity) = partial.opacity {
-            self.opacity.set(opacity);
+            match opacity {
+                JSNullable::Some { item } => {
+                    self.opacity.set(Some(item));
+                },
+                JSNullable::None => {
+                    self.opacity.set(None);
+                }
+            };
         }
         will_apply_some
     }

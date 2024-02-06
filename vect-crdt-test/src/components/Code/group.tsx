@@ -42,7 +42,7 @@ export const GroupOpenCode: FC<GroupCodeProps> = props => {
       <CodeFragment
         selected={isObjectSelected(props.id, selectedObject)}
         onClick={onClick}
-      >{`<g id="${props.id}"${toRgbaString("fill", props.data.fill)}${toRgbaString("stroke", props.data.stroke)}${props.data.stroke_width !== null ? `stroke-width=${props.data.stroke_width}` : ""}>`}</CodeFragment>
+      >{`<g id="${props.id}"${toRgbaString("fill", props.data.fill)}${toRgbaString("stroke", props.data.stroke)}${props.data.stroke_width !== null ? ` stroke-width="${props.data.stroke_width}"` : ""}${props.data.opacity !== null ? ` opacity="${props.data.opacity}"` : ""}>`}</CodeFragment>
     </PaddedDiv>
   )
 };

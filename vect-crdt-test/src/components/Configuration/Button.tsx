@@ -1,4 +1,5 @@
 import { DetailedHTMLProps, FC, HTMLAttributes } from "react";
+import { twMerge } from "tailwind-merge";
 
 type ColorButtonProps =
 & DetailedHTMLProps<HTMLAttributes<HTMLButtonElement>, HTMLButtonElement>
@@ -23,4 +24,29 @@ export const ColorButton: FC<ColorButtonProps> = ({ onClick, children, pickerCol
         { children }
     </div>
     );
+}
+
+type TrashButtonProps = 
+& DetailedHTMLProps<HTMLAttributes<HTMLButtonElement>, HTMLButtonElement>
+& {
+    add?: boolean
+}
+
+export const TrashButton: FC<TrashButtonProps> = ({ className, add, ...props }) => {
+    return (
+        <button
+            className={twMerge(
+                !add ? "bg-red-400 hover:bg-red-500" : "bg-blue-400 hover:bg-blue-500",
+                "flex justify-center items-center rounded-md aspect-square transition ease-in-out duration-100", 
+                className
+            )}
+            { ...props }
+        >
+            {!add ? (
+                <img src="/trash.svg" alt="T" className="h-6 w-6"/>    
+            ) : (
+                <img src="/add.svg" alt="A" className="h-6 w-6"/>
+            )}
+        </button>
+    )
 }

@@ -7,7 +7,7 @@ import { px } from '../../utility/methods';
 import { ConfigurationContainer } from './ConfigurationContainer';
 import { ConfigurationTitle } from './ConfigurationTitle';
 import { useShowHideColorPicker } from './hook';
-import { ColorButton } from './ColorButton';
+import { ColorButton } from './Button';
 
 type ConfigurationCircleProps = {
     data: SelectedSVG,

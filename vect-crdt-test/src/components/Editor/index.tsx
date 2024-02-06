@@ -148,6 +148,9 @@ export const Editor: FC<EditorProps> = (props) => {
   const selected = "root" === selectedObject;
   return (
     <div style={{minWidth: "0px", minHeight: "0px"}} className="grid gap-2">
+      <div className="border-gray-600 border bg-[#1F1F1F] rounded-lg p-2 text-white font-extrabold text-lg">
+        Client {props.docId}
+      </div>
       <div className="overflow-x-scroll border-gray-600 border bg-[#1F1F1F] rounded-lg p-2 scroll" style={{ scrollbarWidth: "thin" }}>
         <CodeFragment selected={selected} onClick={() => setSelectedObject("root")}>{"<svg>"}</CodeFragment>
         <DndContext

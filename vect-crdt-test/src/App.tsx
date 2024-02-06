@@ -3,6 +3,7 @@ import './App.css';
 import { Editor } from './components/Editor';
 import { useSVGDoc } from "./hooks";
 import { NColumnGrid } from './utility/components';
+import { ConfigurationButton } from './components/Configuration/ConfigurationButton';
 
 
 function App() {
@@ -22,26 +23,32 @@ function App() {
 
 
   return (
-    <div className="p-4 h-screen">
-    <NColumnGrid nColumns={3} style={{ gridTemplateColumns: "1fr 200px 1fr"}}>
-      <Editor
-        docId={"t0"}
-        fetchSVGDoc={doc1.fetchSVGDoc}
-        droppableSVG={doc1.droppableSVG}
-        doc={doc1.SVGDocRef}
-      />
-      <div style={{display: "flex", justifyContent: "center", alignItems: "center"}}>
-        <button
-          onClick={onClickMerge}
-        >Merge</button>
+    <div className="p-4 h-screen bg-[#080808]">
+    <NColumnGrid nColumns={3} style={{ gridTemplateColumns: "1fr 200px 1fr", height: "100%"}}>
+      <div>
+        <Editor
+          docId={"t0"}
+          fetchSVGDoc={doc1.fetchSVGDoc}
+          droppableSVG={doc1.droppableSVG}
+          doc={doc1.SVGDocRef}
+        />
       </div>
-      <Editor
-        docId={"t1"}
-        fetchSVGDoc={doc2.fetchSVGDoc}
-        droppableSVG={doc2.droppableSVG}
-        doc={doc2.SVGDocRef}
-      />
-    </NColumnGrid>
+      <div style={{display: "flex", justifyContent: "center", alignItems: "center"}}>
+        <ConfigurationButton
+          onClick={onClickMerge}
+        >
+          Merge
+        </ConfigurationButton>
+      </div>
+      <div>
+        <Editor
+          docId={"t1"}
+          fetchSVGDoc={doc2.fetchSVGDoc}
+          droppableSVG={doc2.droppableSVG}
+          doc={doc2.SVGDocRef}
+        />
+      </div>
+   </NColumnGrid>
     </div>
   )
 }

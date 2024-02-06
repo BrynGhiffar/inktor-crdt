@@ -7,7 +7,7 @@ import { px } from "../../utility/methods";
 import { useShowHideColorPicker } from "./hook";
 import { ConfigurationTitle } from "./ConfigurationTitle";
 import { ConfigurationContainer } from "./ConfigurationContainer";
-import { ColorButton } from "./ColorButton";
+import { ColorButton } from "./Button";
 
 type ConfigurationRectangleProps = {
     data: SelectedSVG
@@ -92,9 +92,9 @@ export const ConfigurationRectangle: FC<ConfigurationRectangleProps> = (props) =
         }}>
             <ConfigurationTitle title="Rectangle"/>
             <TwoColumnGrid style={{ gap: `${px(0)} ${px(20)}` }}>
-                <label htmlFor="" className="text-white">cx</label>
+                <label htmlFor="" className="text-white">x</label>
                 <input min={-100} max={100} value={rect.pos.x} type="range" onChange={e => onChangeCx(e.target.value)}/>
-                <label htmlFor="" className="text-white">cy</label>
+                <label htmlFor="" className="text-white">y</label>
                 <input min={-100} max={100} value={rect.pos.y} type="range" onChange={e => onChangeCy(e.target.value)}/>
                 <label htmlFor="" className="text-white">stroke width</label>
                 <input min={0} max={100} value={rect.stroke_width} type="range" onChange={e => onChangeStrokeWidth(e.target.value)}/>

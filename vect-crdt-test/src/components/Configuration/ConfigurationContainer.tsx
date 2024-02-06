@@ -8,7 +8,7 @@ type ConfigurationContainerProps = DetailedHTMLProps<HTMLAttributes<HTMLDivEleme
 export const ConfigurationContainer: FC<ConfigurationContainerProps> = ({ onClick, className, ...props}) => {
     return (
         <div
-            className={twMerge("bg-[#181818] p-2 rounded-md", className)}
+            className={twMerge("bg-[#181818] p-2 rounded-md border border-gray-600", className)}
             onClick={(e) => {
                 e.stopPropagation();
                 e.preventDefault();

@@ -11,17 +11,25 @@ pub struct SVGGroup {
     pub children: Vec<SVGObject>
 }
 
+#[derive(Serialize, Deserialize, Tsify, Clone, Debug)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+#[serde(tag = "type")]
+pub enum JSNullable<T> {
+    Some { item: T}, None
+}
+
+
 #[derive(Serialize, Deserialize, Tsify, Clone)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct PartialSVGGroup {
     #[tsify(optional)]
-    pub fill: Option<Option<Color>>,
+    pub fill: Option<JSNullable<Color>>,
     #[tsify(optional)]
-    pub stroke: Option<Option<Color>>,
+    pub stroke: Option<JSNullable<Color>>,
     #[tsify(optional)]
-    pub stroke_width: Option<Option<i32>>,
+    pub stroke_width: Option<JSNullable<i32>>,
     #[tsify(optional)]
-    pub opacity: Option<Option<f32>>
+    pub opacity: Option<JSNullable<f32>>
 }
 
 impl partially::Partial for SVGGroup {
@@ -30,16 +38,44 @@ impl partially::Partial for SVGGroup {
         let will_apply_some = partial.fill.is_some() || partial.stroke.is_some()
             || partial.stroke_width.is_some();
         if let Some(fill) = partial.fill {
-            self.fill = fill.into();
+            match fill {
+                JSNullable::Some { item: val } => {
+                    self.fill = Some(val);
+                },
+                JSNullable::None => {
+                    self.fill = None;
+                }
+            }
         }
         if let Some(stroke) = partial.stroke {
-            self.stroke = stroke.into();
+            match stroke {
+                JSNullable::Some { item } => {
+                    self.stroke = Some(item);
+                },
+                JSNullable::None => {
+                    self.stroke = None;
+                }
+            };
         }
         if let Some(stroke_width) = partial.stroke_width {
-            self.stroke_width = stroke_width.into();
+            match stroke_width {
+                JSNullable::Some { item } => {
+                    self.stroke_width = Some(item);
+                },
+                JSNullable::None => {
+                    self.stroke_width = None;
+                }
+            }
         }
         if let Some(opacity) = partial.opacity {
-            self.opacity = opacity.into();
+            match opacity {
+                JSNullable::Some { item } => {
+                    self.opacity = Some(item);
+                },
+                JSNullable::None => {
+                    self.opacity = None
+                }
+            };
         }
         will_apply_some
     }
