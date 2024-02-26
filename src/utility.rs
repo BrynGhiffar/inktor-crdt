@@ -18,8 +18,16 @@ macro_rules! console_log {
     ($($t:tt)*) => {}
 }
 
+// pub fn gen_str_id() -> String {
+//     return StringGenerator::default().next_id();
+// }
+
 pub fn gen_str_id() -> String {
-    return StringGenerator::default().next_id();
+    rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(16)
+        .map(char::from)
+        .collect()
 }
 
 #[derive(Tsify, Serialize, Deserialize, Clone, Debug)]

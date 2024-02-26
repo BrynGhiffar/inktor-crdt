@@ -14,6 +14,7 @@ pub use std::collections::HashSet;
 pub use std::cmp::Ordering;
 pub use web_sys::*;
 pub use crate::*;
+pub use rand::{ distributions::Alphanumeric, Rng };
 pub(crate) use crate::crdt::core::*;
 pub(crate) use crate::crdt::core2::*;
 pub use crate::crdt::vtime::*;

@@ -3,7 +3,7 @@ use crate::prelude::*;
 #[derive(Clone, Serialize, Deserialize)]
 pub struct LWWReg<T> where T: Clone {
     pub val: T,
-    time: UnixEpochTimeNanos
+    pub time: UnixEpochTimeNanos
 }
 
 impl<T> LWWReg<T> where T: Clone {

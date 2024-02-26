@@ -681,43 +681,50 @@ impl SVGDocCrdt2 {
     }
 
     fn redo_move(&mut self, MoveLog { new_group_id, index, object_id, .. }: MoveLog) {
-        let Some(NodeMapItem { object, .. }) = self.node_map.get(&object_id).map(|v| v.value()) else { return; };
+        let Some(lww_node_map) = self.node_map
+            .get(&object_id)
+            else { return; };
         if let Some(new_group_id) = new_group_id.clone() {
             if self.is_ancestor(&object_id, &new_group_id) { return; }
         }
-        let item = NodeMapItem {
-            object: object.clone(),
-            parent_id: new_group_id,
-            index
+        let item = LWWNodeMapItem {
+            object: lww_node_map.object.clone(),
+            parent_id: LWWReg { val: new_group_id, time: lww_node_map.parent_id.time },
+            index: LWWReg { val: index, time: lww_node_map.index.time }
         };
         self.node_map.insert(self.replica_id.clone(), object_id, item.into());
     }
 
     fn undo_move(&mut self, MoveLog { old_group_id, object_id, .. }: MoveLog) {
-        // if self.node_map.get(&object_id).is_none() { return; }
-        let Some(NodeMapItem { object, .. }) = self.node_map
-            .get(&object_id)
-            .map(|v| v.value()) else { return; };
-        let item = NodeMapItem {
-            object: object.clone(),
-            parent_id: old_group_id,
-            index: 0.5
+        let Some(lww_node_map) = self.node_map
+            .get(&object_id) else { return; };
+
+        let item = LWWNodeMapItem {
+            object: lww_node_map.object.clone(),
+            index: LWWReg { val: 0.5, time: lww_node_map.index.time },
+            parent_id: LWWReg { val: old_group_id, time: lww_node_map.parent_id.time }
         };
-        self.node_map.insert(self.replica_id.clone(), object_id, item.into());
-        // self.parent.insert(object_id, (old_group_id, 0.5));
+        self.node_map.insert(self.replica_id.clone(), object_id, item);
     }
 
     fn add_to_move_log(&mut self, move_log: MoveLog) {
         let mut k = self.move_history.len();
         let move_history = self.move_history.clone();
+        let mut move_already_exists = false;
         for (i, hist) in move_history.iter().enumerate().rev() {
+            if hist.timestamp == move_log.timestamp { 
+                move_already_exists = true;
+                break;
+             }
             if hist.timestamp < move_log.timestamp {
                 break
             }
             self.undo_move(hist.clone());
             k = i;
         }
-        self.move_history.insert(k, move_log);
+        if !move_already_exists {
+            self.move_history.insert(k, move_log);
+        }
         let n = self.move_history.len();
         while k < n {
             self.redo_move(self.move_history[k].clone());
