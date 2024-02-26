@@ -11,6 +11,10 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "dependencies": {
+    "@brynghiffar/vect-crdt-js": "file:../pkg_js",
+    "@brynghiffar/vect-crdt-rs": "file:../pkg"
+  },
   "devDependencies": {
     "typescript": "^5.3.3"
   },
