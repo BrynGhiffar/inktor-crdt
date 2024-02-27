@@ -9,6 +9,8 @@ cargo install wasm-pack cargo-generate
 
 ## How to build the library.
 You can build the library by running:
+
 ```
-wasm-pack build
+$ source alias.sh
+$ wasm-build
 ```
