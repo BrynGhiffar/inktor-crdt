@@ -67,7 +67,8 @@ impl partially::Partial for LWWSVGPath {
         let will_apply_some = partial.fill.is_some()
             || partial.stroke_width.is_some() 
             || partial.stroke.is_some()
-            || partial.opacity.is_some();
+            || partial.opacity.is_some()
+            || partial.points.is_some();
         if let Some(fill) = partial.fill {
             self.fill.set(fill);
         }
@@ -79,6 +80,11 @@ impl partially::Partial for LWWSVGPath {
         }
         if let Some(opacity) = partial.opacity {
             self.opacity.set(opacity);
+        }
+        if let Some(mut points) = partial.points {
+            self.points.set(points.drain(..)
+                .map(|it| SVGPathCommand::from_partial(it))
+                .collect());
         }
         will_apply_some
     }

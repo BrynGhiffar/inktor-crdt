@@ -12,12 +12,46 @@ pub enum SVGPathCommand {
     Close { id: String }, // Z
     #[serde(rename = "BEZIER")]
     Bezier { id: String, handle1: Vec2, handle2: Vec2, pos: Vec2 }, // C
-    #[serde(rename = "BEZIER_REFLECT")]
-    BezierReflect { id: String, handle: Vec2, pos: Vec2 }, // S
     #[serde(rename = "BEZIER_QUAD")]
     BezierQuad { id: String, handle: Vec2, pos: Vec2 }, // Q
-    #[serde(rename = "BEZIER_QUAD_REFLECT")]
-    BezierQuadReflect { id: String, pos: Vec2 }, // T
+}
+
+#[derive(Serialize, Deserialize, Tsify, Clone, Debug)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+#[serde(tag = "type")]
+pub enum PartialSVGPathCommand {
+    #[serde(rename = "START")]
+    Start { 
+        #[tsify(optional)]
+        pos: Option<Vec2>
+    }, // M
+    #[serde(rename = "LINE")]
+    Line { 
+        #[tsify(optional)]
+        pos: Option<Vec2>
+    }, // L
+    #[serde(rename = "CLOSE")]
+    Close { }, // Z
+    #[serde(rename = "BEZIER")]
+    Bezier {
+
+        #[tsify(optional)]
+        handle1: Option<Vec2>, 
+
+        #[tsify(optional)]
+        handle2: Option<Vec2>, 
+
+        #[tsify(optional)]
+        pos: Option<Vec2>
+    }, // C
+    #[serde(rename = "BEZIER_QUAD")]
+    BezierQuad { 
+        #[tsify(optional)]
+        handle: Option<Vec2>, 
+
+        #[tsify(optional)]
+        pos: Option<Vec2>
+    }, // Q
 }
 
 impl SVGPathCommand {
@@ -27,9 +61,35 @@ impl SVGPathCommand {
             Self::Line { id, .. } => id,
             Self::Close { id } => id,
             Self::Bezier { id, .. } => id,
-            Self::BezierReflect { id, .. } => id,
             Self::BezierQuad { id, .. } => id,
-            Self::BezierQuadReflect { id, .. } => id
+        }
+    }
+
+    pub fn from_partial(command: PartialSVGPathCommand) -> SVGPathCommand {
+        let id = gen_str_id();
+        match command {
+            PartialSVGPathCommand::Start { pos } => SVGPathCommand::Start { 
+                id, 
+                pos: pos.unwrap_or(Vec2 { x: 0, y: 0 })
+            },
+            PartialSVGPathCommand::Line { pos } => SVGPathCommand::Line { 
+                id, 
+                pos: pos.unwrap_or(Vec2 { x: 0, y: 0 })
+            },
+            PartialSVGPathCommand::Close {  } => SVGPathCommand::Close { 
+                id
+            },
+            PartialSVGPathCommand::Bezier { handle1, handle2, pos } => SVGPathCommand::Bezier { 
+                id, 
+                handle1: handle1.unwrap_or(Vec2 { x: 5, y: 5 }), 
+                handle2: handle2.unwrap_or(Vec2 { x: 5, y: -5 }), 
+                pos: pos.unwrap_or(Vec2 { x: 0, y: 0 })
+            },
+            PartialSVGPathCommand::BezierQuad { handle, pos } => SVGPathCommand::BezierQuad { 
+                id, 
+                handle: handle.unwrap_or(Vec2 { x: 5, y: 5 }), 
+                pos: pos.unwrap_or(Vec2 { x: 0, y: 0 })
+            },
         }
     }
 }
@@ -41,9 +101,7 @@ pub enum SVGPathCommandType {
     LINE = 1,
     CLOSE = 2,
     BEZIER = 3,
-    BEZIER_REFLECT = 4,
     BEZIER_QUAD = 5,
-    BEZIER_QUAD_REFLECT = 6
 }
 
 
@@ -68,14 +126,18 @@ pub struct PartialSVGPath {
     #[tsify(optional)]
     pub stroke: Option<Color>,
     #[tsify(optional)]
-    pub opacity: Option<f32>
+    pub opacity: Option<f32>,
+    #[tsify(optional)]
+    pub points: Option<Vec<PartialSVGPathCommand>>
 }
 
 impl partially::Partial for SVGPath {
     type Item = PartialSVGPath;
     fn apply_some(&mut self, partial: Self::Item) -> bool {
         let will_apply_some = partial.fill.is_some()
-            || partial.stroke_width.is_some() || partial.stroke.is_some();
+            || partial.stroke_width.is_some()
+            || partial.stroke.is_some()
+            || partial.points.is_some();
         if let Some(fill) = partial.fill {
             self.fill = fill.into();
         }
@@ -87,6 +149,10 @@ impl partially::Partial for SVGPath {
         }
         if let Some(opacity) = partial.opacity {
             self.opacity = opacity.into();
+        }
+        if let Some(mut points) = partial.points {
+            self.points = points.drain(..)
+                .map(|it| SVGPathCommand::from_partial(it)).collect();
         }
         will_apply_some
     }

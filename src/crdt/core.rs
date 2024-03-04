@@ -300,16 +300,9 @@ impl SVGDocCrdt {
                 let handle2 = Vec2 { x: pos.x + 20, y: pos.y - 20 };
                 path.points.push(SVGPathCommand::Bezier { id: point_id, handle1, handle2, pos });
             },
-            SVGPathCommandType::BEZIER_REFLECT => {
-                let handle = Vec2 { x: pos.x, y: pos.y + 20 };
-                path.points.push(SVGPathCommand::BezierReflect { id: point_id, handle, pos });
-            },
             SVGPathCommandType::BEZIER_QUAD => {
                 let handle = Vec2 { x: pos.x, y: pos.y + 20 };
                 path.points.push(SVGPathCommand::BezierQuad { id: point_id, handle, pos });
-            },
-            SVGPathCommandType::BEZIER_QUAD_REFLECT => {
-                path.points.push(SVGPathCommand::BezierQuadReflect { id: point_id, pos });
             }
         };
     }
@@ -359,17 +352,10 @@ impl SVGDocCrdt {
                 let handle2 = Vec2 { x: pos.x + 20, y: pos.y - 20 };
                 SVGPathCommand::Bezier { id: gen_str_id(), handle1, handle2, pos }
             },
-            SVGPathCommandType::BEZIER_REFLECT => {
-                let handle = Vec2 { x: pos.x, y: pos.y + 20 };
-                SVGPathCommand::BezierReflect { id: gen_str_id(), handle, pos }
-            },
             SVGPathCommandType::BEZIER_QUAD => {
                 let handle = Vec2 { x: pos.x, y: pos.y + 20 };
                 SVGPathCommand::BezierQuad { id: gen_str_id(), handle, pos }
             },
-            SVGPathCommandType::BEZIER_QUAD_REFLECT => {
-                SVGPathCommand::BezierQuadReflect { id: gen_str_id(), pos }
-            }
         };
         *point = command;
     }
@@ -395,9 +381,6 @@ impl SVGDocCrdt {
             SVGPathCommand::BezierQuad { pos, .. } => {
                 *pos = new_pos;
             },
-            SVGPathCommand::BezierQuadReflect { pos, .. } => {
-                *pos = new_pos;
-            },
             _ => ()
         };
     }
@@ -413,9 +396,6 @@ impl SVGDocCrdt {
         match point {
             SVGPathCommand::Bezier { handle1, .. } => {
                 *handle1 = new_handle1;
-            },
-            SVGPathCommand::BezierReflect { handle, .. } => {
-                *handle = new_handle1;
             },
             SVGPathCommand::BezierQuad { handle, .. } => {
                 *handle = new_handle1;
