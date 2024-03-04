@@ -32,6 +32,20 @@ pub struct PartialSVGRectangle {
     pub opacity: Option<f32>
 }
 
+impl PartialSVGRectangle {
+    pub fn empty() -> Self {
+        Self { 
+            pos: None, 
+            height: None, 
+            width: None, 
+            fill: None, 
+            stroke_width: None, 
+            stroke: None, 
+            opacity: None
+        }
+    }
+}
+
 impl partially::Partial for SVGRectangle {
     type Item = PartialSVGRectangle;
     fn apply_some(&mut self, partial: Self::Item) -> bool {

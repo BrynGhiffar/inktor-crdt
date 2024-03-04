@@ -845,6 +845,20 @@ impl SVGDocCrdt2 {
 mod tests {
     pub use super::*;
 
+    fn merge_docs(doc1: &mut SVGDocCrdt2, doc2: &mut SVGDocCrdt2) {
+        let (d1_node_map, d1_move_logs) = doc1.broadcast_aux();
+        let (d2_node_map, d2_move_logs) = doc2.broadcast_aux();
+        doc2.merge_aux(d1_node_map, d1_move_logs);
+        doc1.merge_aux(d2_node_map, d2_move_logs);
+
+        let t1 = doc1.tree();
+        let t2 = doc2.tree();
+
+        let t1_str = serde_json::to_string(&t1).unwrap();
+        let t2_str = serde_json::to_string(&t2).unwrap();
+        assert_eq!(t1_str, t2_str);
+    }
+
     #[test]
     fn test_create_circle() {
         let r1 = "r1";
@@ -1229,21 +1243,22 @@ mod tests {
         let mut doc2 = SVGDocCrdt2::new(r2.clone());
 
         doc1.add_circle(None, PartialSVGCircle::empty());
-        let (r1_node_map, r1_move_logs) = doc1.broadcast_aux();
-        doc2.merge_aux(r1_node_map, r1_move_logs);
+
+        merge_docs(&mut doc1, &mut doc2);
+
         let t2 = doc2.tree();
         let circle_id = match t2.children.get(0) {
             Some(SVGObject::Circle(circle)) => circle.id.clone(),
             _ => panic!("Circle should exist at index 0")
         };
+
         let mut edits = PartialSVGCircle::empty();
         edits.opacity = Some(0.5);
         doc2.edit_circle(circle_id.clone(), edits);
         doc1.remove_object(circle_id);
-        let (r1_node_map, r1_move_logs) = doc1.broadcast_aux();
-        let (r2_node_map, r2_move_logs) = doc2.broadcast_aux();
-        doc1.merge_aux(r2_node_map, r2_move_logs);
-        doc2.merge_aux(r1_node_map, r1_move_logs);
+
+        merge_docs(&mut doc1, &mut doc2);
+
         let t1 = doc1.tree();
         let t2 = doc2.tree();
 
@@ -1289,7 +1304,7 @@ mod tests {
     }
 
     #[test]
-    fn merge_delete_then_edit() {
+    fn test_case_1_edit_different_attributes_circle() {
         let r1 = "r1".to_string();
         let r2 = "r2".to_string();
 
@@ -1297,31 +1312,346 @@ mod tests {
         let mut doc2 = SVGDocCrdt2::new(r2);
 
         doc1.add_circle(None, PartialSVGCircle::empty());
-        let (d1_node_map, d1_move_logs) = doc1.broadcast_aux();
-        let (d2_node_map, d2_move_logs) = doc2.broadcast_aux();
-        doc2.merge_aux(d1_node_map, d1_move_logs);
-        doc1.merge_aux(d2_node_map, d2_move_logs);
+        merge_docs(&mut doc1, &mut doc2);
+
         let t1 = doc1.tree();
         let circle_id = match t1.children.get(0) {
             Some(SVGObject::Circle(c)) => &c.id,
             _ => panic!("Circle should exist")
         };
-        doc2.remove_object(circle_id.clone());
-        let mut edits = PartialSVGCircle::empty();
-        edits.opacity = Some(0.5);
-        doc1.edit_circle(circle_id.clone(), edits);
 
-        let (d1_node_map, d1_move_logs) = doc1.broadcast_aux();
-        let (d2_node_map, d2_move_logs) = doc2.broadcast_aux();
-        doc2.merge_aux(d1_node_map, d1_move_logs);
-        doc1.merge_aux(d2_node_map, d2_move_logs);
+        let mut edits1 = PartialSVGCircle::empty();
+        edits1.opacity = Some(0.5);
+        doc1.edit_circle(circle_id.to_string(), edits1);
 
-        let t1 = doc2.tree();
-        match t1.children.get(0) {
+        let mut edits2 = PartialSVGCircle::empty();
+        edits2.radius = Some(100);
+
+        doc2.edit_circle(circle_id.to_string(), edits2);
+
+        merge_docs(&mut doc1, &mut doc2);
+
+        let tree = doc1.tree();
+        match tree.children.get(0) {
             Some(SVGObject::Circle(c)) => {
                 assert_eq!(c.opacity, 0.5);
+                assert_eq!(c.radius, 100);
             },
             _ => panic!("Circle should exist")
         };
     }
+
+    #[test]
+    fn test_case_1_edit_different_attributes_rect() {
+        let r1 = "r1".to_string();
+        let r2 = "r2".to_string();
+
+        let mut doc1 = SVGDocCrdt2::new(r1);
+        let mut doc2 = SVGDocCrdt2::new(r2);
+
+        doc1.add_rectangle(None, PartialSVGRectangle::empty());
+        merge_docs(&mut doc1, &mut doc2);
+
+        let t1 = doc1.tree();
+        let rect_id = match t1.children.get(0) {
+            Some(SVGObject::Rectangle(r)) => &r.id,
+            _ => panic!("Rectangle should exist")
+        };
+
+        let mut edits1 = PartialSVGRectangle::empty();
+        edits1.opacity = Some(0.5);
+        doc1.edit_rectangle(rect_id.to_string(), edits1);
+
+        let mut edits2 = PartialSVGRectangle::empty();
+        edits2.width = Some(100);
+
+        doc2.edit_rectangle(rect_id.to_string(), edits2);
+        merge_docs(&mut doc1, &mut doc2);
+
+        let tree = doc1.tree();
+        match tree.children.get(0) {
+            Some(SVGObject::Rectangle(c)) => {
+                assert_eq!(c.opacity, 0.5);
+                assert_eq!(c.width, 100);
+            },
+            _ => panic!("Rectangle should exist")
+        };
+    }
+
+    #[test]
+    fn test_case_1_edit_different_attributes_path() {
+        let r1 = "r1".to_string();
+        let r2 = "r2".to_string();
+
+        let mut doc1 = SVGDocCrdt2::new(r1);
+        let mut doc2 = SVGDocCrdt2::new(r2);
+
+        doc1.add_path(None, PartialSVGPath::empty());
+        merge_docs(&mut doc1, &mut doc2);
+
+        let t1 = doc1.tree();
+
+        let path_id = t1.children.get(0)
+            .map(|it| { let SVGObject::Path(o) = it else { return None; };
+                Some(&o.id)
+            })
+            .flatten()
+            .expect("Path should exist");
+        
+        let mut edits1 = PartialSVGPath::empty();
+        edits1.opacity = Some(0.5);
+        doc1.edit_path(path_id.to_string(), edits1);
+
+        let mut edits2 = PartialSVGPath::empty();
+        edits2.stroke_width = Some(100);
+        doc2.edit_path(path_id.to_string(), edits2);
+
+        merge_docs(&mut doc1, &mut doc2);
+
+        let tree = doc1.tree();
+        let path = tree.children.get(0)
+            .map(|it| {
+                let SVGObject::Path(o) = it else { return None; };
+                Some(o)  
+            })
+            .flatten()
+            .expect("Path should exist");
+        assert_eq!(path.opacity, 0.5);
+        assert_eq!(path.stroke_width, 100);
+    }
+
+    #[test]
+    fn test_case_1_edit_different_attributes_group() {
+        let r1 = "r1".to_string();
+        let r2 = "r2".to_string();
+
+        let mut doc1 = SVGDocCrdt2::new(r1);
+        let mut doc2 = SVGDocCrdt2::new(r2);
+
+        doc1.add_group(None, PartialSVGGroup::empty());
+        merge_docs(&mut doc1, &mut doc2);
+
+        let t1 = doc1.tree();
+
+        let group_id = t1.children.get(0)
+            .map(|it| {
+                let SVGObject::Group(o) = it else { return None; };
+                Some(&o.id)
+            })
+            .flatten()
+            .expect("Group should exist");
+        
+        let mut edits1 = PartialSVGGroup::empty();
+        edits1.opacity = Some(JSNullable::Some { item: 0.5 });
+        doc1.edit_group(group_id.to_string(), edits1);
+
+        let mut edits2 = PartialSVGGroup::empty();
+        edits2.stroke_width = Some(JSNullable::Some { item: 100 });
+        doc2.edit_group(group_id.to_string(), edits2);
+
+        merge_docs(&mut doc1, &mut doc2);
+
+        let tree = doc1.tree();
+        let group = tree.children.get(0)
+            .map(|it| {
+                let SVGObject::Group(o) = it else { return None; };
+                Some(o)  
+            })
+            .flatten()
+            .expect("Group should exist");
+        assert_eq!(group.opacity, Some(0.5));
+        assert_eq!(group.stroke_width, Some(100));
+    }
+
+    #[test]
+    fn test_case_2_concurrent_edit_and_delete() {
+        let r1 = "r1".to_string();
+        let r2 = "r2".to_string();
+
+        let mut doc1 = SVGDocCrdt2::new(r1);
+        let mut doc2 = SVGDocCrdt2::new(r2);
+
+        doc1.add_circle(None, PartialSVGCircle::empty());
+
+        merge_docs(&mut doc1, &mut doc2);
+
+        let t1 = doc1.tree();
+        let circle_id = t1.children.get(0)
+            .map(|it| if let SVGObject::Circle(o) = it {
+                Some(&o.id)
+            } else {
+                None 
+            })
+            .flatten()
+            .expect("Circle should exist");
+
+
+        // Client 1 is editing the circle
+        let mut edits = PartialSVGCircle::empty();
+        edits.opacity = Some(0.5);
+        doc1.edit_circle(circle_id.clone(), edits);
+
+        // Client 2 is removing the circle
+        doc2.remove_object(circle_id.clone());
+
+        merge_docs(&mut doc1, &mut doc2);
+
+        let t1 = doc2.tree();
+        let circle = t1.children.get(0)
+            .map(|it| if let SVGObject::Circle(o) = it {
+                Some(o)
+            } else {
+                None 
+            })
+            .flatten()
+            .expect("Circle should exist");
+        assert_eq!(circle.opacity, 0.5);
+    }
+
+    #[test]
+    fn test_case_2_concurrent_move_and_delete() {
+        let r1 = "r1".to_string();
+        let r2 = "r2".to_string();
+
+        let mut doc1 = SVGDocCrdt2::new(r1);
+        let mut doc2 = SVGDocCrdt2::new(r2);
+
+        doc1.add_group(None, PartialSVGGroup::empty());
+        doc1.add_circle(None, PartialSVGCircle::empty());
+
+        merge_docs(&mut doc1, &mut doc2);
+
+        let tree = doc1.tree();
+
+        let group_id = tree.children.get(0)
+            .map(|it| if let SVGObject::Group(o) = it {
+                Some(&o.id)
+            } else {
+                None 
+            })
+            .flatten()
+            .expect("Group should exist");
+        
+        let circle_id = tree.children.get(1)
+            .map(|it| if let SVGObject::Circle(o) = it {
+                Some(&o.id)
+            } else {
+                None 
+            })
+            .flatten()
+            .expect("Circle should exist");
+
+        // client 1 is moving the object into a group
+        doc1.move_object(Some(group_id.to_string()), circle_id.to_string(), None);
+
+        // client 2 is deleting the circle
+        doc2.remove_object(circle_id.to_string());
+
+        merge_docs(&mut doc1, &mut doc2);
+
+        let tree = doc1.tree();
+
+        let group = tree.children.get(0)
+            .map(|it| if let SVGObject::Group(o) = it {
+                Some(o)
+            } else {
+                None
+            })
+            .flatten()
+            .expect("Group should exist");
+            
+        let circle = group.children.get(0)
+            .map(|it| if let SVGObject::Circle(o) = it {
+                Some(o)
+            } else {
+                None
+            })
+            .flatten()
+            .expect("Circle should exist");
+
+        assert_eq!(circle_id, &circle.id)
+    }
+
+    #[test]
+    fn test_case_3_concurrent_move_to_different_groups() {
+        let r1 = "r1".to_string();
+        let r2 = "r2".to_string();
+
+        let mut doc1 = SVGDocCrdt2::new(r1);
+        let mut doc2 = SVGDocCrdt2::new(r2);
+
+        doc1.add_group(None, PartialSVGGroup::empty());
+        doc1.add_group(None, PartialSVGGroup::empty());
+        doc1.add_rectangle(None, PartialSVGRectangle::empty());
+
+        merge_docs(&mut doc1, &mut doc2);
+
+        let tree = doc1.tree();
+        let group1_id = tree.children.get(0)
+            .map(|it| if let SVGObject::Group(o) = it {
+                Some(&o.id)
+            } else {
+                None
+            })
+            .flatten()
+            .expect("Group should exist");
+
+        let group2_id = tree.children.get(1)
+            .map(|it| if let SVGObject::Group(o) = it {
+                Some(&o.id)
+            } else {
+                None
+            })
+            .flatten()
+            .expect("Group should exist");
+
+        let rect_id = tree.children.get(2)
+            .map(|it| if let SVGObject::Rectangle(o) = it {
+                Some(&o.id)
+            } else {
+                None
+            })
+            .flatten()
+            .expect("Rectangle should exist");
+
+        doc1.move_object(Some(group1_id.to_string()), rect_id.to_string(), None);
+        doc2.move_object(Some(group2_id.to_string()), rect_id.to_string(), None);
+
+        merge_docs(&mut doc1, &mut doc2);
+
+        let tree = doc1.tree();
+
+        let group1 = tree.children.get(0)
+            .map(|it| if let SVGObject::Group(o) = it {
+                Some(o)
+            } else {
+                None
+            })
+            .flatten()
+            .expect("Group should exist");
+        let group2 = tree.children.get(1)
+            .map(|it| if let SVGObject::Group(o) = it {
+                Some(o)
+            } else {
+                None
+            })
+            .flatten()
+            .expect("Group should exist");
+
+
+        let rect = group2.children.get(0)
+            .map(|it| if let SVGObject::Rectangle(o) = it {
+                Some(o)
+            } else {
+                None
+            })
+            .flatten()
+            .expect("Rectangle should exist");
+        
+        assert_eq!(group1.children.len(), 0);
+        assert_eq!(group2.children.len(), 1);
+        assert_eq!(&rect.id, rect_id);
+        assert_eq!(tree.children.len(), 2);
+    }
+
 }

@@ -1,3 +1,4 @@
+#![allow(unused)]
 pub use wasm_timer::{ SystemTime, UNIX_EPOCH };
 pub use std::time::Duration;
 // pub use std::time::{SystemTime, UNIX_EPOCH};

@@ -131,6 +131,18 @@ pub struct PartialSVGPath {
     pub points: Option<Vec<PartialSVGPathCommand>>
 }
 
+impl PartialSVGPath {
+    pub fn empty() -> Self {
+        Self { 
+            fill: None, 
+            stroke_width: None, 
+            stroke: None, 
+            opacity: None, 
+            points: None
+        }
+    }
+}
+
 impl partially::Partial for SVGPath {
     type Item = PartialSVGPath;
     fn apply_some(&mut self, partial: Self::Item) -> bool {
