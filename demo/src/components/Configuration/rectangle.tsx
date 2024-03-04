@@ -82,6 +82,12 @@ export const ConfigurationRectangle: FC<ConfigurationRectangleProps> = (props) =
         fetchSVGDoc();
     }, [fetchSVGDoc, docRef, rect]);
 
+    const onClickDelete = useCallback(() => {
+        if (rect === undefined) return;
+        docRef.current.remove_object(rect.id);
+        fetchSVGDoc()
+    }, [fetchSVGDoc, docRef, rect]);
+
     if (rect === undefined) return (<></>);
     const [ fillRed, fillGreen, fillBlue, fillOpacity ] = rect.fill;
     const [ strokeRed, strokeGreen, strokeBlue, strokeOpacity ] = rect.stroke;
@@ -90,7 +96,7 @@ export const ConfigurationRectangle: FC<ConfigurationRectangleProps> = (props) =
             fill.hideColorPicker();
             stroke.hideColorPicker();
         }}>
-            <ConfigurationTitle title="Rectangle"/>
+            <ConfigurationTitle title="Rectangle" onClickDeleteButton={onClickDelete}/>
             <TwoColumnGrid style={{ gap: `${px(0)} ${px(20)}` }}>
                 <label htmlFor="" className="text-white">x</label>
                 <input min={-100} max={100} value={rect.pos.x} type="range" onChange={e => onChangeCx(e.target.value)}/>

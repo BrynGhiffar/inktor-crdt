@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { flattenSVGDocTree, getSVGData, saveSVGData } from "../utility/methods";
 // import { SVGDoc } from "@brynghiffar/vect-crdt-rs";
 import { SVGDoc as SVGDocRs } from "@brynghiffar/vect-crdt-rs";

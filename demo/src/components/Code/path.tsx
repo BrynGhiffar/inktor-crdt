@@ -23,12 +23,8 @@ const toPathString = (point: SVGPathCommand) => {
       return "Z"
     case "BEZIER":
       return `C ${point.handle1.x} ${point.handle1.y} ${point.handle2.x} ${point.handle2.y} ${point.pos.x} ${point.pos.y}`
-    case "BEZIER_REFLECT":
-      return `S ${point.handle.x} ${point.handle.y} ${point.pos.x} ${point.pos.y}`
     case "BEZIER_QUAD":
       return `Q ${point.handle.x} ${point.handle.y} ${point.pos.x} ${point.pos.y}`
-    case "BEZIER_QUAD_REFLECT":
-      return `T ${point.pos.x} ${point.pos.y}`
   }
 }
 

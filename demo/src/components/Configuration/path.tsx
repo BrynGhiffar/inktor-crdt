@@ -47,6 +47,11 @@ export const ConfigurationPath: FC<ConfigurationPathProps> = (props) => {
         if (Number.isNaN(opacity)) return;
         docRef.current.edit_path(path.id, { opacity });
         fetchSVGDoc();
+    }, [docRef, fetchSVGDoc, path]);
+    const onClickDelete = useCallback(() => {
+        if (path === undefined) return;
+        docRef.current.remove_object(path.id);
+        fetchSVGDoc();
     }, [docRef, fetchSVGDoc, path])
     const fill = useShowHideColorPicker();
     const stroke = useShowHideColorPicker();
@@ -63,6 +68,7 @@ export const ConfigurationPath: FC<ConfigurationPathProps> = (props) => {
         >
             <ConfigurationTitle
                 title="Path"
+                onClickDeleteButton={onClickDelete}
             />
             <TwoColumnGrid>
                 <label className="text-white">stroke width</label>
@@ -151,12 +157,8 @@ const getPathCommandHandle1X = (command: SVGPathCommand) => {
     if (command.type === "CLOSE") return 0;
     if (command.type === "LINE") return 0;
     if (command.type === "START") return 0;
-    if (command.type === "BEZIER_QUAD_REFLECT") return 0;
     if (command.type === "BEZIER") {
         return command.handle1.x;
-    }
-    if (command.type === "BEZIER_REFLECT") {
-        return command.handle.x;
     }
     return command.handle.x
 }
@@ -165,12 +167,8 @@ const getPathCommandHandle1Y = (command: SVGPathCommand) => {
     if (command.type === "CLOSE") return 0;
     if (command.type === "LINE") return 0;
     if (command.type === "START") return 0;
-    if (command.type === "BEZIER_QUAD_REFLECT") return 0;
     if (command.type === "BEZIER") {
         return command.handle1.y;
-    }
-    if (command.type === "BEZIER_REFLECT") {
-        return command.handle.y;
     }
     return command.handle.y
 }
@@ -213,14 +211,8 @@ const ConfigurationPathCommandRow: FC<ConfigurationPathCommandRowProps> = (props
             case "BEZIER":
                 docRef.current.edit_path_point_type(pathId, data.id, SVGPathCommandType.BEZIER);
                 break;
-            case "BEZIER_REFLECT":
-                docRef.current.edit_path_point_type(pathId, data.id, SVGPathCommandType.BEZIER_REFLECT);
-                break;
             case "BEZIER_QUAD":
                 docRef.current.edit_path_point_type(pathId, data.id, SVGPathCommandType.BEZIER_QUAD);
-                break;
-            case "BEZIER_QUAD_REFLECT":
-                docRef.current.edit_path_point_type(pathId, data.id, SVGPathCommandType.BEZIER_QUAD_REFLECT);
                 break;
         }
         fetchSVGDoc();
@@ -292,9 +284,7 @@ const ConfigurationPathCommandRow: FC<ConfigurationPathCommandRowProps> = (props
                 <option value="LINE">Line</option>
                 <option value="CLOSE">Close</option>
                 <option value="BEZIER">Bezier</option>
-                <option value="BEZIER_REFLECT">Bezier Reflect</option>
                 <option value="BEZIER_QUAD">Bezier Quad</option>
-                <option value="BEZIER_QUAD_REFLECT">Bezier Quad Reflect</option>
             </select>
             <div><input
                 type="number"
