@@ -1,4 +1,4 @@
-use vect_crdt_rs::prelude::*;
+use inktor_crdt::prelude::*;
 
 #[test]
 fn test_merge() {

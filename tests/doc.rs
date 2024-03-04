@@ -1,4 +1,4 @@
-use vect_crdt_rs::prelude::*;
+use inktor_crdt::prelude::*;
 
 fn empty_circle() -> PartialSVGCircle {
     PartialSVGCircle {
