@@ -18,7 +18,7 @@ demo application.
 ### Case 1: Concurrently changing different attributes of the same element
 ![](./assets/case1_example.gif)
 
-### Case 2: Concurrently moving an element and deleting an element
+### Case 2: Concurrently editing/moving an element and deleting an element
 ![](./assets/case2_example.gif)
 
 ### Case 3: Concurrently moving an element to different groups
