@@ -15,7 +15,7 @@ $ npm run dev
 In my thesis I talk about some CRDT cases, that the algorithm we propose aims to fulfill. Below are gifs of cases I talk about in my thesis, by using this
 demo application.
 
-### Case 1: Concurrent changing different attributes of the same element
+### Case 1: Concurrently changing different attributes of the same element
 ![](./assets/case1_example.gif)
 
 ### Case 2: Concurrently moving an element and deleting an element
