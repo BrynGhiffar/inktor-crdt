@@ -39,6 +39,6 @@ $ wasm-buildjs
 
 You can run the tests with `cargo test`. The cases discussed in my thesis paper are at the bottom of the file `src/crdt/core2.rs`.
 
-## Running the demo application.
+## Running demo
 
-To run the demo application you need to build both the WASM version and the JS version. Once built you can run `npm i` and then `npm run dev` to run the development server.
+To run the demo application you need to build both the WASM version and the JS version. Once built you can `cd demo` and run `npm i`, then `npm run dev` to run the development server.
