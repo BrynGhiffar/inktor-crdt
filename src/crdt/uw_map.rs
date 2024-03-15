@@ -61,6 +61,30 @@ impl<K, V> UWMap<K, V> where K: UWMapKey, V: UWMapItem + Mergeable {
         })
     }
 
+    pub fn insert_novtime_update(
+        &mut self,
+        key: K,
+        value: V
+    ) {
+        let update_vtime = self.updated.remove(&key);
+        let remove_vtime = self.removed.remove(&key);
+        match (update_vtime, remove_vtime) {
+            (Some(vtime), _) => {
+                self.updated.insert(key.clone(), vtime);
+                self.kv.insert(key, value);
+            },
+            (_, Some(vtime)) => {
+                self.updated.insert(key.clone(), vtime);
+                self.kv.insert(key, value);
+            },
+            (_, _) => {
+                let vtime = VTime::zero();
+                self.updated.insert(key.clone(), vtime);
+                self.kv.insert(key, value);
+            }
+        }
+    }
+
     pub fn insert(
         &mut self,
         replica_id: ReplicaId,

@@ -665,7 +665,7 @@ impl SVGDocCrdt2 {
             parent_id: LWWReg { val: new_group_id, time: lww_node_map.parent_id.time },
             index: LWWReg { val: index, time: lww_node_map.index.time }
         };
-        self.node_map.insert(self.replica_id.clone(), object_id, item.into());
+        self.node_map.insert_novtime_update(object_id, item.into());
     }
 
     fn undo_move(&mut self, MoveLog { old_group_id, object_id, .. }: MoveLog) {
@@ -677,7 +677,7 @@ impl SVGDocCrdt2 {
             index: LWWReg { val: FractionalIndex::default(), time: lww_node_map.index.time },
             parent_id: LWWReg { val: old_group_id, time: lww_node_map.parent_id.time }
         };
-        self.node_map.insert(self.replica_id.clone(), object_id, item);
+        self.node_map.insert_novtime_update(object_id, item);
     }
 
     fn add_to_move_log(&mut self, move_log: MoveLog) {
