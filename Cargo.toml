@@ -25,6 +25,7 @@ getrandom = { version = "0.2", features = ["js"] }
 partially = { version = "0.2.0", features = ["derive"] }
 wasm-timer = "0.2.5"
 rand = "0.8.5"
+fractional_index = "2.0.1"
 
 [dependencies.web-sys]
 version = "0.3"

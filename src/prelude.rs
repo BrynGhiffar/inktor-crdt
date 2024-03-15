@@ -15,7 +15,6 @@ pub use std::collections::HashSet;
 pub use std::cmp::Ordering;
 pub use web_sys::*;
 pub use crate::*;
-pub use rand::{ distributions::Alphanumeric, Rng };
 pub(crate) use crate::crdt::core::*;
 pub(crate) use crate::crdt::core2::*;
 pub use crate::crdt::vtime::*;
@@ -41,3 +40,6 @@ pub use crate::{
 };
 
 pub use std::hash::Hash;
+pub(crate) use fractional_index::FractionalIndex;
+pub(crate) use std::borrow::BorrowMut;
+pub(crate) use rand::{thread_rng, Rng, distributions::Open01, distributions::Alphanumeric};

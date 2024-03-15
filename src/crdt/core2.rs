@@ -1,7 +1,3 @@
-use std::borrow::BorrowMut;
-
-use rand::{thread_rng, Rng, distributions::Open01};
-
 use crate::prelude::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -9,7 +5,7 @@ pub struct MoveLog {
     old_group_id: Option<NodeID>,
     new_group_id: Option<NodeID>,
     object_id: NodeID,
-    index: f32,
+    index: FractionalIndex,
     timestamp: UnixEpochTimeNanos
 }
 
@@ -26,7 +22,7 @@ static NEW_NODE_ROOT_ID: &'static str = "NEW_NODES_ROOT_ID";
 pub struct LWWNodeMapItem {
     object: LWWReg<LWWSVGObject>,
     parent_id: LWWReg<Option<NodeID>>,
-    index: LWWReg<f32>,
+    index: LWWReg<FractionalIndex>,
 }
 
 impl LWWNodeMapItem {
@@ -71,7 +67,7 @@ impl LWWNodeMapItem {
         self.parent_id.set(parent_id);
     }
 
-    pub fn update_index(&mut self, index: f32) {
+    pub fn update_index(&mut self, index: FractionalIndex) {
         self.index.set(index);
     }
 
@@ -93,7 +89,7 @@ impl From<NodeMapItem> for LWWNodeMapItem {
 pub struct NodeMapItem {
     object: SVGObject,
     parent_id: Option<NodeID>,
-    index: f32,
+    index: FractionalIndex,
 }
 
 impl Mergeable for LWWNodeMapItem {
@@ -126,7 +122,6 @@ impl Mergeable for LWWNodeMapItem {
 pub struct SVGDocCrdt2 {
     replica_id: ReplicaId,
     node_map: UWMap<NodeID, LWWNodeMapItem>,
-    // parent: HashMap<NodeID, (Option<NodeID>, f32)>,
     move_history: Vec<MoveLog>,
     send_buffer: Vec<MoveLog>,
 }
@@ -157,7 +152,7 @@ impl SVGDocCrdt2 {
         return self.is_ancestor(object1_id, &parent);
     }
 
-    fn get_children(&self, object_id: &Option<NodeID>) -> Option<Vec<(f32, NodeID)>> {
+    fn get_children(&self, object_id: &Option<NodeID>) -> Option<Vec<(FractionalIndex, NodeID)>> {
         // Returns the children of a group node or root node.
         if let Some(object_id) = object_id {
             if let Some(NodeMapItem { object: SVGObject::Group(_), .. }) = self.node_map
@@ -173,51 +168,50 @@ impl SVGDocCrdt2 {
                 acc.push((idx.clone(), node_id.clone()));
                 acc
             });
-        res.sort_by(|(idx_a, _), (idx_b, _)| idx_a.total_cmp(idx_b));
+        res.sort_by(|(idx_a, _), (idx_b, _)| idx_a.cmp(idx_b));
         Some(res)
     }
 
-    fn get_fractional_index_insert_at(&self, parent_id: &Option<NodeID>, object_id: &NodeID, index: Option<usize>) -> Option<f32> {
+    fn get_fractional_index_insert_at(&self, parent_id: &Option<NodeID>, object_id: &NodeID, index: Option<usize>) -> Option<FractionalIndex> {
         // Returns the children of a group node or root node.
         console_log!("Target index: {:?}", index);
         let children = match self.get_children(parent_id) {
             Some(v) => v,
             None => return None,
         };
-
         let children = children.iter()
             .filter(|(_, node_id)| node_id != object_id)
             .collect::<Vec<_>>();
-        
         if children.len() == 0 {
-            let val = Some(thread_rng().sample(Open01));
-            return val;
+            // let val = Some(thread_rng().sample(Open01));
+            return Some(FractionalIndex::default());
         }
         let generate_last = || {
             let (last, _) = children.last().unwrap();
-            let diff = 1.0 - last;
-            return Some(last + thread_rng().sample::<f32, _>(Open01) * diff);
+            let res = FractionalIndex::new_after(&last);
+            Some(res)
         };
         let generate_first = || {
             let (first, _) = children.first().unwrap();
-            console_log!("Generate first: {}", first);
-            return Some(thread_rng().sample::<f32, _>(Open01) * first);
+            Some(FractionalIndex::new_before(&first))
         };
         let index = match index {
             Some(index) => index,
-            None => return generate_last(),
+            None => {
+                return generate_last()
+            },
         };
         if index >= children.len() {
-            return generate_last();
+            let (last, _) = children.last().unwrap();
+            let res = FractionalIndex::new_after(&last);
+            return Some(res);
         }
         if index == 0 {
             return generate_first();
         }
         let (lower, _) = children.get(index - 1).unwrap();
         let (upper, _) = children.get(index).unwrap();
-        let rr = thread_rng().sample::<f32, _>(Open01);
-        console_log!("lower: {}, upper: {}", lower, upper);
-        return Some(lower + rr * (upper - lower));
+        return FractionalIndex::new_between(lower, upper);
     }
 
     pub fn get_group(&self, group_id: NodeID) -> Option<SVGGroup> {
@@ -278,7 +272,7 @@ impl SVGDocCrdt2 {
         let item = NodeMapItem {
             object: SVGObject::Group(group),
             parent_id: Some(NEW_NODE_ROOT_ID.to_string()),
-            index: 0.5
+            index: FractionalIndex::default()
         };
         self.node_map.insert(self.replica_id.clone(), new_group_id.clone(), item.into());
         // self.parent.insert(new_group_id.clone(), (Some(NEW_NODE_ROOT_ID.to_string()), 0.5));
@@ -303,7 +297,7 @@ impl SVGDocCrdt2 {
         let item = NodeMapItem {
             object: SVGObject::Circle(circle),
             parent_id: Some(NEW_NODE_ROOT_ID.to_string()),
-            index: 0.5,
+            index: FractionalIndex::default(),
         };
         self.node_map.insert(self.replica_id.clone(), circle_id.clone(), item.into());
         self.move_object(group_id, circle_id, None);
@@ -327,7 +321,7 @@ impl SVGDocCrdt2 {
         let item = NodeMapItem {
             object: SVGObject::Rectangle(rectangle),
             parent_id: Some(NEW_NODE_ROOT_ID.to_string()),
-            index: 0.5
+            index: FractionalIndex::default()
         };
         self.node_map.insert(self.replica_id.clone(), rect_id.clone(), item.into());
         // self.parent.insert(rect_id.clone(), (Some(NEW_NODE_ROOT_ID.to_string()), 0.5));
@@ -352,7 +346,7 @@ impl SVGDocCrdt2 {
         let item = NodeMapItem {
             object: SVGObject::Path(path),
             parent_id: Some(NEW_NODE_ROOT_ID.to_string()),
-            index: 0.5
+            index: FractionalIndex::default()
         };
         self.node_map.insert(self.replica_id.clone(), path_id.clone(), item.into());
         self.move_object(group_id, path_id, None);
@@ -639,7 +633,7 @@ impl SVGDocCrdt2 {
             let Some(item) = self.node_map.get(&object_id) else { return; };
             let mut item = item.clone();
             item.update_parent_id(Some(group_id.clone()));
-            item.update_index(index);
+            item.update_index(index.clone());
             self.node_map.insert(self.replica_id.clone(), object_id.clone(), item);
             let move_log = MoveLog { new_group_id: Some(group_id), old_group_id, index, object_id, timestamp: now };
             self.send_buffer.push(move_log.clone());
@@ -649,11 +643,10 @@ impl SVGDocCrdt2 {
         // get fractional index
 
         let Some(index) = self.get_fractional_index_insert_at(&None, &object_id, index) else { return; };
-        // self.parent.insert(object_id.clone(), (None, index));
         let Some(item) = self.node_map.get(&object_id) else { return; };
         let mut item = item.clone();
         item.update_parent_id(None);
-        item.update_index(index);
+        item.update_index(index.clone());
         self.node_map.insert(self.replica_id.clone(), object_id.clone(), item);
         let move_log = MoveLog { new_group_id: None, old_group_id, index, object_id, timestamp: now };
         self.send_buffer.push(move_log.clone());
@@ -681,7 +674,7 @@ impl SVGDocCrdt2 {
 
         let item = LWWNodeMapItem {
             object: lww_node_map.object.clone(),
-            index: LWWReg { val: 0.5, time: lww_node_map.index.time },
+            index: LWWReg { val: FractionalIndex::default(), time: lww_node_map.index.time },
             parent_id: LWWReg { val: old_group_id, time: lww_node_map.parent_id.time }
         };
         self.node_map.insert(self.replica_id.clone(), object_id, item);
@@ -833,7 +826,7 @@ impl SVGDocCrdt2 {
         console_log!("[BASE] Rendering tree");
         let mut tmp = node_map.drain().map(|(_, o)| o.value()).collect::<Vec<_>>();
         tmp.sort_by(|NodeMapItem { index: index_a, .. }, NodeMapItem { index: index_b, .. }| {
-            index_a.total_cmp(index_b)
+            index_a.cmp(index_b)
         });
         res.children = tmp.drain(..).map(|NodeMapItem { object, .. }| object).collect();
         console_log!("[BASE] Finished");
